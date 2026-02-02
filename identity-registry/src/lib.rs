@@ -4,7 +4,9 @@ multiversx_sc::imports!();
 multiversx_sc::derive_imports!();
 
 #[type_abi]
-#[derive(TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode)]
+#[derive(
+    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
+)]
 pub struct AgentDetails<M: ManagedTypeApi> {
     pub name: ManagedBuffer<M>,
     pub uri: ManagedBuffer<M>,
@@ -13,56 +15,113 @@ pub struct AgentDetails<M: ManagedTypeApi> {
 }
 
 #[type_abi]
-#[derive(TopEncode)]
+#[derive(
+    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
+)]
 pub struct AgentRegisteredEventData<M: ManagedTypeApi> {
     pub name: ManagedBuffer<M>,
     pub uri: ManagedBuffer<M>,
 }
 
 #[multiversx_sc::contract]
-pub trait IdentityRegistry {
+pub trait IdentityRegistry:
+    multiversx_sc_modules::default_issue_callbacks::DefaultIssueCallbacksModule
+{
     #[init]
     fn init(&self) {}
 
+    #[only_owner]
+    #[payable("EGLD")]
+    #[endpoint(issue_token)]
+    fn issue_token(&self, token_display_name: ManagedBuffer, token_ticker: ManagedBuffer) {
+        require!(self.agent_token_id().is_empty(), "Token already issued");
+        let issue_cost = self.call_value().egld().clone_value();
+
+        self.agent_token_id().issue_and_set_all_roles(
+            EsdtTokenType::NonFungible,
+            issue_cost,
+            token_display_name,
+            token_ticker,
+            0,
+            None,
+        );
+    }
+
     #[endpoint(register_agent)]
     fn register_agent(&self, name: ManagedBuffer, uri: ManagedBuffer, public_key: ManagedBuffer) {
-        let nonce = self.agent_uri_nonce().update(|n| {
+        require!(!self.agent_token_id().is_empty(), "Token not issued");
+
+        let caller = self.blockchain().get_caller();
+        let nonce = self.agent_token_nonce().update(|n| {
             *n += 1;
             *n
         });
 
-        self.agent_uri(nonce).set(&uri);
-        self.agent_public_key(nonce).set(&public_key);
-        self.agent_name(nonce).set(&name);
-        self.agent_owner(nonce).set(self.blockchain().get_caller());
+        let details = AgentDetails {
+            name: name.clone(),
+            uri: uri.clone(),
+            public_key: public_key.clone(),
+            owner: caller.clone(),
+        };
 
-        self.agent_registered_event(
-            &self.blockchain().get_caller(),
-            nonce,
-            AgentRegisteredEventData { name, uri },
+        // Mint Soulbound NFT
+        // Roles required: ESDTRoleNFTCreate, ESDTRoleNFTUpdateAttributes
+        // Transfer role should be kept by the contract to ensure souldbound property
+        self.send().esdt_nft_create(
+            &self.agent_token_id().get_token_id(),
+            &BigUint::from(1u64),
+            &name,
+            &BigUint::from(0u64),  // No royalties
+            &ManagedBuffer::new(), // Attributes hash (optional)
+            &details,
+            &self.create_uris_vec(uri.clone()),
         );
+
+        // Send NFT to caller
+        self.tx()
+            .to(&caller)
+            .single_esdt(
+                &self.agent_token_id().get_token_id(),
+                nonce,
+                &BigUint::from(1u64),
+            )
+            .transfer();
+
+        self.agent_registered_event(&caller, nonce, AgentRegisteredEventData { name, uri });
     }
 
     #[endpoint(update_agent)]
     fn update_agent(&self, nonce: u64, new_uri: ManagedBuffer, new_public_key: ManagedBuffer) {
-        let caller = self.blockchain().get_caller();
-        let owner = self.agent_owner(nonce).get();
-        require!(caller == owner, "Only owner can update agent");
+        require!(!self.agent_token_id().is_empty(), "Token not issued");
 
-        self.agent_uri(nonce).set(&new_uri);
-        self.agent_public_key(nonce).set(&new_public_key);
+        let caller = self.blockchain().get_caller();
+        let token_id = self.agent_token_id().get_token_id();
+
+        // Fetch attributes to check ownership and preserve data
+        let mut details: AgentDetails<Self::Api> =
+            self.blockchain().get_token_attributes(&token_id, nonce);
+        require!(caller == details.owner, "Only owner can update agent");
+
+        // Update URI and PK
+        details.uri = new_uri.clone();
+        details.public_key = new_public_key;
+
+        self.send()
+            .nft_update_attributes(&token_id, nonce, &details);
 
         self.agent_updated_event(nonce, &new_uri);
     }
 
+    fn create_uris_vec(&self, uri: ManagedBuffer) -> ManagedVec<ManagedBuffer> {
+        let mut uris = ManagedVec::new();
+        uris.push(uri);
+        uris
+    }
+
     #[view(getAgent)]
     fn get_agent(&self, nonce: u64) -> AgentDetails<Self::Api> {
-        AgentDetails {
-            name: self.agent_name(nonce).get(),
-            uri: self.agent_uri(nonce).get(),
-            public_key: self.agent_public_key(nonce).get(),
-            owner: self.agent_owner(nonce).get(),
-        }
+        let token_id = self.agent_token_id().get_token_id();
+        self.blockchain().get_token_attributes(&token_id, nonce)
     }
 
     // Events
@@ -80,27 +139,11 @@ pub trait IdentityRegistry {
 
     // Storage Mappers
 
-    #[view]
-    #[storage_mapper("agentNftTokenId")]
-    fn agent_nft_token_id(&self) -> SingleValueMapper<TokenIdentifier>;
+    #[view(getAgentTokenId)]
+    #[storage_mapper("agentTokenId")]
+    fn agent_token_id(&self) -> NonFungibleTokenMapper;
 
-    #[view(agent_uri_nonce)]
-    #[storage_mapper("agentUriNonce")]
-    fn agent_uri_nonce(&self) -> SingleValueMapper<u64>;
-
-    #[view]
-    #[storage_mapper("agentUri")]
-    fn agent_uri(&self, nonce: u64) -> SingleValueMapper<ManagedBuffer>;
-
-    #[view]
-    #[storage_mapper("agentPublicKey")]
-    fn agent_public_key(&self, nonce: u64) -> SingleValueMapper<ManagedBuffer>;
-
-    #[view]
-    #[storage_mapper("agentName")]
-    fn agent_name(&self, nonce: u64) -> SingleValueMapper<ManagedBuffer>;
-
-    #[view]
-    #[storage_mapper("agentOwner")]
-    fn agent_owner(&self, nonce: u64) -> SingleValueMapper<ManagedAddress>;
+    #[view(agent_token_nonce)]
+    #[storage_mapper("agentTokenNonce")]
+    fn agent_token_nonce(&self) -> SingleValueMapper<u64>;
 }

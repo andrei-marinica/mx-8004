@@ -1,5 +1,7 @@
 use identity_registry::*;
-use multiversx_sc::types::{BigUint, ManagedAddress, ManagedBuffer};
+use multiversx_sc::types::{
+    BigUint, EsdtLocalRole, ManagedAddress, ManagedBuffer, TokenIdentifier,
+};
 use multiversx_sc_scenario::rust_biguint;
 use multiversx_sc_scenario::testing_framework::BlockchainStateWrapper;
 use reputation_registry::*;
@@ -37,13 +39,27 @@ fn test_authenticity_loop() {
         REP_WASM,
     );
 
-    // 2. Setup reputation registry
+    // 2. Setup registries
     b_mock
         .execute_tx(&owner, &rep_sc, &rust_biguint!(0), |sc| {
             sc.validation_contract_address()
                 .set(ManagedAddress::from(val_sc.address_ref().clone()));
         })
         .assert_ok();
+
+    // Setup Identity Registry Token
+    b_mock
+        .execute_tx(&owner, &id_sc, &rust_biguint!(0), |sc| {
+            sc.agent_token_id()
+                .set_token_id(TokenIdentifier::from("AGENT-123456"));
+        })
+        .assert_ok();
+
+    b_mock.set_esdt_local_roles(
+        id_sc.address_ref(),
+        b"AGENT-123456",
+        &[EsdtLocalRole::NftCreate, EsdtLocalRole::NftUpdateAttributes],
+    );
 
     // 3. Register Agent
     b_mock

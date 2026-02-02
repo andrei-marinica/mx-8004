@@ -20,6 +20,7 @@ pub trait ReputationRegistry {
     #[init]
     fn init(&self) {}
 
+    #[allow(deprecated)]
     #[endpoint(submit_feedback)]
     fn submit_feedback(&self, job_id: ManagedBuffer, agent_nonce: u64, rating: BigUint) {
         let caller = self.blockchain().get_caller();
@@ -29,7 +30,7 @@ pub trait ReputationRegistry {
         let is_verified: bool = self
             .validation_proxy(validation_addr.clone())
             .is_job_verified(job_id.clone())
-            .execute_on_dest_context();
+            .execute_on_dest_context(); // #[allow(deprecated)]
 
         require!(is_verified, "Job not verified");
 
@@ -37,7 +38,7 @@ pub trait ReputationRegistry {
         let employer: ManagedAddress = self
             .validation_proxy(validation_addr)
             .get_job_employer(job_id.clone())
-            .execute_on_dest_context();
+            .execute_on_dest_context(); // #[allow(deprecated)]
 
         require!(caller == employer, "Only the employer can provide feedback");
 

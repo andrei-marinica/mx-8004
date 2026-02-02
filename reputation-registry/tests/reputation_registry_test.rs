@@ -46,7 +46,20 @@ fn test_reputation_flow() {
         })
         .assert_user_error("Job not verified");
 
-    // 5. Verify job in Validation Registry
+    // 5. Initialize Job and Authorize Feedback
+    b_mock
+        .execute_tx(&user_addr, &val_wrapper, &rust_biguint!(0), |sc| {
+            sc.init_job(ManagedBuffer::from("job_1"), 1u64);
+        })
+        .assert_ok();
+
+    b_mock
+        .execute_tx(&owner_addr, &rep_wrapper, &rust_biguint!(0), |sc| {
+            sc.authorize_feedback(ManagedBuffer::from("job_1"), user_addr.clone().into());
+        })
+        .assert_ok();
+
+    // 6. Verify job in Validation Registry
     b_mock
         .execute_tx(&owner_addr, &val_wrapper, &rust_biguint!(0), |sc| {
             sc.job_status(ManagedBuffer::from("job_1"))
@@ -54,7 +67,7 @@ fn test_reputation_flow() {
         })
         .assert_ok();
 
-    // 6. Submit feedback for VERIFIED job -> Should PASS
+    // 7. Submit feedback for VERIFIED job -> Should PASS
     b_mock
         .execute_tx(&user_addr, &rep_wrapper, &rust_biguint!(0), |sc| {
             sc.submit_feedback(ManagedBuffer::from("job_1"), 1u64, BigUint::from(5u64));

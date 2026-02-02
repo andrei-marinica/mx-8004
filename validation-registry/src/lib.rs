@@ -24,7 +24,7 @@ pub trait ValidationRegistry {
         self.job_employer(job_id.clone())
             .set(self.blockchain().get_caller());
         self.job_creation_timestamp(job_id.clone())
-            .set(self.blockchain().get_block_timestamp());
+            .set(self.blockchain().get_block_timestamp_seconds());
         self.job_agent_nonce(job_id).set(agent_nonce);
     }
 
@@ -51,11 +51,11 @@ pub trait ValidationRegistry {
 
     #[endpoint(clean_old_jobs)]
     fn clean_old_jobs(&self, job_ids: MultiValueEncoded<ManagedBuffer>) {
-        let now = self.blockchain().get_block_timestamp();
-        let three_days = 3 * 24 * 60 * 60;
+        let current_time = self.blockchain().get_block_timestamp_seconds();
+        let three_days = DurationSeconds::new(3 * 24 * 60 * 60);
         for job_id in job_ids {
             let ts = self.job_creation_timestamp(job_id.clone()).get();
-            if ts != 0 && now > ts + three_days {
+            if ts > TimestampSeconds::new(0) && current_time > ts + three_days {
                 self.job_proof(job_id.clone()).clear();
                 self.job_status(job_id.clone()).clear();
                 self.job_employer(job_id.clone()).clear();
@@ -94,7 +94,7 @@ pub trait ValidationRegistry {
 
     #[view(getJobCreationTimestamp)]
     #[storage_mapper("jobCreationTimestamp")]
-    fn job_creation_timestamp(&self, job_id: ManagedBuffer) -> SingleValueMapper<u64>;
+    fn job_creation_timestamp(&self, job_id: ManagedBuffer) -> SingleValueMapper<TimestampSeconds>;
 
     #[view(getJobAgentNonce)]
     #[storage_mapper("jobAgentNonce")]
