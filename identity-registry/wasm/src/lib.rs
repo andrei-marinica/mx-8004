@@ -21,8 +21,8 @@ multiversx_sc_wasm_adapter::endpoints! {
         issue_token => issue_token
         register_agent => register_agent
         update_agent => update_agent
-        getAgent => get_agent
-        getAgentTokenId => agent_token_id
+        get_agent => get_agent
+        get_agent_token_id => agent_token_id
         agent_token_nonce => agent_token_nonce
     )
 }

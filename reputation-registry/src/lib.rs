@@ -11,6 +11,9 @@ pub trait ReputationRegistry {
     #[init]
     fn init(&self) {}
 
+    #[upgrade]
+    fn upgrade(&self) {}
+
     #[endpoint(submit_feedback)]
     fn submit_feedback(&self, job_id: ManagedBuffer, agent_nonce: u64, rating: BigUint) {
         let caller = self.blockchain().get_caller();

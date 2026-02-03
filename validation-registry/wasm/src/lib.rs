@@ -23,7 +23,7 @@ multiversx_sc_wasm_adapter::endpoints! {
         verify_job => verify_job
         clean_old_jobs => clean_old_jobs
         is_job_verified => is_job_verified
-        getJobData => get_job_data
+        get_job_data => get_job_data
     )
 }
 

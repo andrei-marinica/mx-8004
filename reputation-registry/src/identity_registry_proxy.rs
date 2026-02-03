@@ -123,7 +123,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, AgentDetails<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgent")
+            .raw_call("get_agent")
             .argument(&nonce)
             .original_result()
     }
@@ -133,7 +133,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, EsdtTokenIdentifier<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentTokenId")
+            .raw_call("get_agent_token_id")
             .original_result()
     }
 

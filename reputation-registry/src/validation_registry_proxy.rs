@@ -141,7 +141,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, OptionalValue<JobData<Env::Api>>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getJobData")
+            .raw_call("get_job_data")
             .argument(&job_id)
             .original_result()
     }

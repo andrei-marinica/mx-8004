@@ -28,6 +28,9 @@ pub trait ValidationRegistry {
     #[init]
     fn init(&self) {}
 
+    #[upgrade]
+    fn upgrade(&self) {}
+
     #[endpoint(init_job)]
     fn init_job(&self, job_id: ManagedBuffer, agent_nonce: u64) {
         let job_mapper = self.job_data(&job_id);
@@ -91,7 +94,7 @@ pub trait ValidationRegistry {
         !job_mapper.is_empty() && job_mapper.get().status == JobStatus::Verified
     }
 
-    #[view(getJobData)]
+    #[view(get_job_data)]
     fn get_job_data(&self, job_id: ManagedBuffer) -> OptionalValue<JobData<Self::Api>> {
         let job_mapper = self.job_data(&job_id);
         if job_mapper.is_empty() {

@@ -30,6 +30,9 @@ pub trait IdentityRegistry:
     #[init]
     fn init(&self) {}
 
+    #[upgrade]
+    fn upgrade(&self) {}
+
     #[only_owner]
     #[payable("EGLD")]
     #[endpoint(issue_token)]
@@ -119,13 +122,13 @@ pub trait IdentityRegistry:
         uris
     }
 
-    #[view(getAgent)]
+    #[view(get_agent)]
     fn get_agent(&self, nonce: u64) -> AgentDetails<Self::Api> {
         let token_id = self.agent_token_id().get_token_id();
         self.blockchain().get_token_attributes(&token_id, nonce)
     }
 
-    #[view(getAgentId)]
+    #[view(get_agent_id)]
     fn get_agent_id(&self, address: ManagedAddress) -> u64 {
         self.agent_id_by_address(&address).get()
     }
@@ -145,7 +148,7 @@ pub trait IdentityRegistry:
 
     // Storage Mappers
 
-    #[view(getAgentTokenId)]
+    #[view(get_agent_token_id)]
     #[storage_mapper("agentTokenId")]
     fn agent_token_id(&self) -> NonFungibleTokenMapper;
 
