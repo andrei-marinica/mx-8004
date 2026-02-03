@@ -50,6 +50,8 @@ fn test_register_agent() {
         assert_eq!(agent.uri, ManagedBuffer::from("ipfs://hash"));
         assert_eq!(agent.public_key, ManagedBuffer::from("public_key_hex"));
         assert_eq!(agent.owner, ManagedAddress::from(agent_addr.clone()));
+
+        assert_eq!(sc.get_agent_id(ManagedAddress::from(agent_addr.clone())), 1);
     });
 }
 

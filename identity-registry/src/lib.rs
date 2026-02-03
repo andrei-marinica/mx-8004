@@ -87,6 +87,7 @@ pub trait IdentityRegistry:
             )
             .transfer();
 
+        self.agent_id_by_address(&caller).set(nonce);
         self.agent_registered_event(&caller, nonce, AgentRegisteredEventData { name, uri });
     }
 
@@ -124,6 +125,11 @@ pub trait IdentityRegistry:
         self.blockchain().get_token_attributes(&token_id, nonce)
     }
 
+    #[view(getAgentId)]
+    fn get_agent_id(&self, address: ManagedAddress) -> u64 {
+        self.agent_id_by_address(&address).get()
+    }
+
     // Events
 
     #[event("agentRegistered")]
@@ -146,4 +152,7 @@ pub trait IdentityRegistry:
     #[view(agent_token_nonce)]
     #[storage_mapper("agentTokenNonce")]
     fn agent_token_nonce(&self) -> SingleValueMapper<u64>;
+
+    #[storage_mapper("agentIdByAddress")]
+    fn agent_id_by_address(&self, address: &ManagedAddress) -> SingleValueMapper<u64>;
 }
