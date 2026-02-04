@@ -7,11 +7,21 @@ multiversx_sc::derive_imports!();
 #[derive(
     TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
 )]
+pub struct MetadataEntry<M: ManagedTypeApi> {
+    pub key: ManagedBuffer<M>,
+    pub value: ManagedBuffer<M>,
+}
+
+#[type_abi]
+#[derive(
+    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
+)]
 pub struct AgentDetails<M: ManagedTypeApi> {
     pub name: ManagedBuffer<M>,
     pub uri: ManagedBuffer<M>,
     pub public_key: ManagedBuffer<M>,
     pub owner: ManagedAddress<M>,
+    pub metadata: ManagedVec<M, MetadataEntry<M>>,
 }
 
 #[type_abi]
@@ -50,8 +60,21 @@ pub trait IdentityRegistry:
         );
     }
 
+    /// Register a new agent with name, URI, public key, and optional metadata entries.
+    ///
+    /// # Arguments
+    /// * `name` - Display name of the agent
+    /// * `uri` - URI pointing to the Agent Registration File (ARF) JSON
+    /// * `public_key` - Public key for signature verification
+    /// * `metadata` - Optional list of key-value metadata entries (EIP-8004 compatible)
     #[endpoint(register_agent)]
-    fn register_agent(&self, name: ManagedBuffer, uri: ManagedBuffer, public_key: ManagedBuffer) {
+    fn register_agent(
+        &self,
+        name: ManagedBuffer,
+        uri: ManagedBuffer,
+        public_key: ManagedBuffer,
+        metadata: OptionalValue<ManagedVec<MetadataEntry<Self::Api>>>,
+    ) {
         require!(!self.agent_token_id().is_empty(), "Token not issued");
 
         let caller = self.blockchain().get_caller();
@@ -60,22 +83,26 @@ pub trait IdentityRegistry:
             *n
         });
 
+        let metadata_vec = match metadata {
+            OptionalValue::Some(m) => m,
+            OptionalValue::None => ManagedVec::new(),
+        };
+
         let details = AgentDetails {
             name: name.clone(),
             uri: uri.clone(),
             public_key: public_key.clone(),
             owner: caller.clone(),
+            metadata: metadata_vec,
         };
 
         // Mint Soulbound NFT
-        // Roles required: ESDTRoleNFTCreate, ESDTRoleNFTUpdateAttributes
-        // Transfer role should be kept by the contract to ensure souldbound property
         self.send().esdt_nft_create(
             &self.agent_token_id().get_token_id(),
             &BigUint::from(1u64),
             &name,
-            &BigUint::from(0u64),  // No royalties
-            &ManagedBuffer::new(), // Attributes hash (optional)
+            &BigUint::from(0u64),
+            &ManagedBuffer::new(),
             &details,
             &self.create_uris_vec(uri.clone()),
         );
@@ -94,26 +121,88 @@ pub trait IdentityRegistry:
         self.agent_registered_event(&caller, nonce, AgentRegisteredEventData { name, uri });
     }
 
+    /// Update an agent's URI, public key, and optionally metadata.
+    /// Only the owner of the agent NFT can call this.
     #[endpoint(update_agent)]
-    fn update_agent(&self, nonce: u64, new_uri: ManagedBuffer, new_public_key: ManagedBuffer) {
+    fn update_agent(
+        &self,
+        nonce: u64,
+        new_uri: ManagedBuffer,
+        new_public_key: ManagedBuffer,
+        metadata: OptionalValue<ManagedVec<MetadataEntry<Self::Api>>>,
+    ) {
         require!(!self.agent_token_id().is_empty(), "Token not issued");
 
         let caller = self.blockchain().get_caller();
         let token_id = self.agent_token_id().get_token_id();
 
-        // Fetch attributes to check ownership and preserve data
         let mut details: AgentDetails<Self::Api> =
             self.blockchain().get_token_attributes(&token_id, nonce);
         require!(caller == details.owner, "Only owner can update agent");
 
-        // Update URI and PK
         details.uri = new_uri.clone();
         details.public_key = new_public_key;
+
+        if let OptionalValue::Some(m) = metadata {
+            details.metadata = m;
+        }
 
         self.send()
             .nft_update_attributes(&token_id, nonce, &details);
 
         self.agent_updated_event(nonce, &new_uri);
+    }
+
+    /// Set or update specific metadata entries for an agent.
+    /// This merges with existing metadata (upsert behavior).
+    #[endpoint(set_metadata)]
+    fn set_metadata(&self, nonce: u64, entries: ManagedVec<MetadataEntry<Self::Api>>) {
+        require!(!self.agent_token_id().is_empty(), "Token not issued");
+
+        let caller = self.blockchain().get_caller();
+        let token_id = self.agent_token_id().get_token_id();
+
+        let mut details: AgentDetails<Self::Api> =
+            self.blockchain().get_token_attributes(&token_id, nonce);
+        require!(caller == details.owner, "Only owner can set metadata");
+
+        // Upsert: update existing keys, add new ones
+        for entry in entries.iter() {
+            let mut found = false;
+            let mut new_metadata = ManagedVec::new();
+            for existing in details.metadata.iter() {
+                if existing.key == entry.key {
+                    new_metadata.push(entry.clone());
+                    found = true;
+                } else {
+                    new_metadata.push(existing.clone());
+                }
+            }
+            if !found {
+                new_metadata.push(entry.clone());
+            }
+            details.metadata = new_metadata;
+        }
+
+        self.send()
+            .nft_update_attributes(&token_id, nonce, &details);
+
+        self.metadata_updated_event(nonce);
+    }
+
+    /// Get a specific metadata value by key for an agent.
+    #[view(get_metadata)]
+    fn get_metadata(&self, nonce: u64, key: ManagedBuffer) -> OptionalValue<ManagedBuffer> {
+        let token_id = self.agent_token_id().get_token_id();
+        let details: AgentDetails<Self::Api> =
+            self.blockchain().get_token_attributes(&token_id, nonce);
+
+        for entry in details.metadata.iter() {
+            if entry.key == key {
+                return OptionalValue::Some(entry.value.clone());
+            }
+        }
+        OptionalValue::None
     }
 
     fn create_uris_vec(&self, uri: ManagedBuffer) -> ManagedVec<ManagedBuffer> {
@@ -145,6 +234,9 @@ pub trait IdentityRegistry:
 
     #[event("agentUpdated")]
     fn agent_updated_event(&self, #[indexed] nonce: u64, uri: &ManagedBuffer);
+
+    #[event("metadataUpdated")]
+    fn metadata_updated_event(&self, #[indexed] nonce: u64);
 
     // Storage Mappers
 

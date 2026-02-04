@@ -2,6 +2,7 @@ use identity_registry::*;
 use multiversx_sc::types::{
     BigUint, EsdtLocalRole, ManagedAddress, ManagedBuffer, TokenIdentifier,
 };
+use multiversx_sc_scenario::imports::OptionalValue;
 use multiversx_sc_scenario::rust_biguint;
 use multiversx_sc_scenario::testing_framework::BlockchainStateWrapper;
 use reputation_registry::*;
@@ -68,6 +69,7 @@ fn test_authenticity_loop() {
                 ManagedBuffer::from("Moltbot-01"),
                 ManagedBuffer::from("ipfs://manifest"),
                 ManagedBuffer::from("pubkey"),
+                OptionalValue::None,
             );
         })
         .assert_ok();

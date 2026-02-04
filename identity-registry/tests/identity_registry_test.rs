@@ -1,5 +1,6 @@
 use identity_registry::*;
 use multiversx_sc::types::{EsdtLocalRole, ManagedAddress, ManagedBuffer, TokenIdentifier};
+use multiversx_sc_scenario::imports::OptionalValue;
 use multiversx_sc_scenario::rust_biguint;
 use multiversx_sc_scenario::testing_framework::BlockchainStateWrapper;
 
@@ -39,6 +40,7 @@ fn test_register_agent() {
                 ManagedBuffer::from("Moltbot-01"),
                 ManagedBuffer::from("ipfs://hash"),
                 ManagedBuffer::from("public_key_hex"),
+                OptionalValue::None,
             );
         })
         .assert_ok();
@@ -88,6 +90,7 @@ fn test_update_agent() {
                 ManagedBuffer::from("Moltbot-01"),
                 ManagedBuffer::from("ipfs://hash"),
                 ManagedBuffer::from("public_key_hex"),
+                OptionalValue::None,
             );
         })
         .assert_ok();
@@ -99,6 +102,7 @@ fn test_update_agent() {
                 1,
                 ManagedBuffer::from("ipfs://new_hash"),
                 ManagedBuffer::from("new_public_key_hex"),
+                OptionalValue::None,
             );
         })
         .assert_ok();
