@@ -78,6 +78,11 @@ pub trait IdentityRegistry:
         require!(!self.agent_token_id().is_empty(), "Token not issued");
 
         let caller = self.blockchain().get_caller();
+        require!(
+            self.agent_id_by_address(&caller).is_empty(),
+            "Agent already registered for this address"
+        );
+
         let nonce = self.agent_token_nonce().update(|n| {
             *n += 1;
             *n
