@@ -28,6 +28,16 @@ pub struct AgentDetails<M: ManagedTypeApi> {
 #[derive(
     TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
 )]
+pub struct AgentServiceConfig<M: ManagedTypeApi> {
+    pub token: EgldOrEsdtTokenIdentifier<M>,
+    pub pnonce: u64,
+    pub price: BigUint<M>,
+}
+
+#[type_abi]
+#[derive(
+    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
+)]
 pub struct AgentRegisteredEventData<M: ManagedTypeApi> {
     pub name: ManagedBuffer<M>,
     pub uri: ManagedBuffer<M>,
@@ -284,6 +294,20 @@ pub trait IdentityRegistry:
             }
         }
         OptionalValue::None
+    }
+
+    /// Get the complete payment configuration for a specific agent service in one call.
+    #[view(get_agent_service_config)]
+    fn get_agent_service_config(
+        &self,
+        nonce: u64,
+        service_id: ManagedBuffer,
+    ) -> AgentServiceConfig<Self::Api> {
+        AgentServiceConfig {
+            token: self.agent_service_payment_token(nonce, &service_id).get(),
+            pnonce: self.agent_service_payment_nonce(nonce, &service_id).get(),
+            price: self.agent_service_price(nonce, &service_id).get(),
+        }
     }
 
     fn create_uris_vec(&self, uri: ManagedBuffer) -> ManagedVec<ManagedBuffer> {

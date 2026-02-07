@@ -237,6 +237,70 @@ fn test_register_agent_default_price_zero() {
     });
 }
 
+#[test]
+fn test_get_agent_service_config() {
+    let mut b_mock = BlockchainStateWrapper::new();
+    let owner_addr = b_mock.create_user_account(&rust_biguint!(0));
+    let agent_addr = b_mock.create_user_account(&rust_biguint!(0));
+
+    let id_wrapper = b_mock.create_sc_account(
+        &rust_biguint!(0),
+        Some(&owner_addr),
+        identity_registry::contract_obj,
+        WASM_PATH,
+    );
+
+    b_mock
+        .execute_tx(&owner_addr, &id_wrapper, &rust_biguint!(0), |sc| {
+            sc.agent_token_id()
+                .set_token_id(TokenIdentifier::from("AGENT-123456"));
+        })
+        .assert_ok();
+
+    b_mock.set_esdt_local_roles(
+        id_wrapper.address_ref(),
+        b"AGENT-123456",
+        &[EsdtLocalRole::NftCreate, EsdtLocalRole::NftUpdateAttributes],
+    );
+
+    b_mock
+        .execute_tx(&agent_addr, &id_wrapper, &rust_biguint!(0), |sc| {
+            let mut metadata = ManagedVec::new();
+            metadata.push(MetadataEntry {
+                key: ManagedBuffer::from("price:chat"),
+                value: ManagedBuffer::from(&b"\x64"[..]), // 100
+            });
+            metadata.push(MetadataEntry {
+                key: ManagedBuffer::from("token:chat"),
+                value: ManagedBuffer::from(&b"USDC-123456"[..]),
+            });
+            metadata.push(MetadataEntry {
+                key: ManagedBuffer::from("pnonce:chat"),
+                value: ManagedBuffer::from(&10u64.to_be_bytes()[..]),
+            });
+
+            sc.register_agent(
+                ManagedBuffer::from("AgentConfig"),
+                ManagedBuffer::from("uri"),
+                ManagedBuffer::from("pk"),
+                OptionalValue::Some(metadata),
+            );
+        })
+        .assert_ok();
+
+    let _ = b_mock.execute_query(&id_wrapper, |sc| {
+        let config = sc.get_agent_service_config(1, ManagedBuffer::from("chat"));
+
+        assert_eq!(config.price, BigUint::from(100u32));
+        assert!(config.token.is_esdt());
+        assert_eq!(
+            config.token.unwrap_esdt(),
+            TokenIdentifier::from("USDC-123456")
+        );
+        assert_eq!(config.pnonce, 10u64);
+    });
+}
+
 use multiversx_sc_scenario::*;
 
 fn world() -> ScenarioWorld {
