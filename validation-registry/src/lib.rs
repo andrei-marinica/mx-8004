@@ -83,7 +83,7 @@ pub trait ValidationRegistry {
 
         let mut total_paid = BigUint::zero();
         if required_token.is_egld() {
-            total_paid = self.call_value().egld_value().clone_value();
+            total_paid = self.call_value().egld().clone_value();
         } else {
             for pay in payment.iter() {
                 let pay_token = EgldOrEsdtTokenIdentifier::esdt(pay.token_identifier.clone());

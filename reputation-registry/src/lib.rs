@@ -14,6 +14,18 @@ pub trait ReputationRegistry {
     #[upgrade]
     fn upgrade(&self) {}
 
+    #[only_owner]
+    #[endpoint(set_identity_contract_address)]
+    fn set_identity_contract_address(&self, address: ManagedAddress) {
+        self.identity_contract_address().set(&address);
+    }
+
+    #[only_owner]
+    #[endpoint(set_validation_contract_address)]
+    fn set_validation_contract_address(&self, address: ManagedAddress) {
+        self.validation_contract_address().set(&address);
+    }
+
     #[endpoint(submit_feedback)]
     fn submit_feedback(&self, job_id: ManagedBuffer, agent_nonce: u64, rating: BigUint) {
         let caller = self.blockchain().get_caller();
@@ -73,8 +85,35 @@ pub trait ReputationRegistry {
 
     #[endpoint(authorize_feedback)]
     fn authorize_feedback(&self, job_id: ManagedBuffer, client: ManagedAddress) {
-        // In a real scenario, we'd check if caller owns the agent linked to job_id
-        // For this standard, we assume the agent calling this owns the job context
+        // 1. Get Agent Nonce from Validation Registry
+        let validation_addr = self.validation_contract_address().get();
+        let job_data = self
+            .tx()
+            .to(&validation_addr)
+            .typed(validation_registry_proxy::ValidationRegistryProxy)
+            .get_job_data(&job_id)
+            .returns(ReturnsResult)
+            .sync_call()
+            .into_option()
+            .unwrap_or_else(|| sc_panic!("Job not found or not initialized"));
+
+        // 2. Get Agent Owner from Identity Registry
+        let identity_addr = self.identity_contract_address().get();
+        let agent_details = self
+            .tx()
+            .to(&identity_addr)
+            .typed(identity_registry_proxy::IdentityRegistryProxy)
+            .get_agent(job_data.agent_nonce)
+            .returns(ReturnsResult)
+            .sync_call();
+
+        // 3. Verify Caller is the Agent Owner
+        let caller = self.blockchain().get_caller();
+        require!(
+            caller == agent_details.owner,
+            "Only the agent owner can authorize feedback"
+        );
+
         self.is_feedback_authorized(job_id, client).set(true);
     }
 

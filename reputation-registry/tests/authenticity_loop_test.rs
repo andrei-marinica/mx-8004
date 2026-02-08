@@ -45,6 +45,8 @@ fn test_authenticity_loop() {
         .execute_tx(&owner, &rep_sc, &rust_biguint!(0), |sc| {
             sc.validation_contract_address()
                 .set(ManagedAddress::from(val_sc.address_ref().clone()));
+            sc.identity_contract_address()
+                .set(ManagedAddress::from(id_sc.address_ref().clone()));
         })
         .assert_ok();
 

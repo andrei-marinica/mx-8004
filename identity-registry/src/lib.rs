@@ -132,6 +132,10 @@ pub trait IdentityRegistry:
             &self.create_uris_vec(uri.clone()),
         );
 
+        self.agent_id_by_address(&caller).set(nonce);
+        self.agent_owner(nonce).set(&caller);
+        self.agent_registered_event(&caller, nonce, AgentRegisteredEventData { name, uri });
+
         // Send NFT to caller
         self.tx()
             .to(&caller)
@@ -141,10 +145,6 @@ pub trait IdentityRegistry:
                 &BigUint::from(1u64),
             )
             .transfer();
-
-        self.agent_id_by_address(&caller).set(nonce);
-        self.agent_owner(nonce).set(&caller);
-        self.agent_registered_event(&caller, nonce, AgentRegisteredEventData { name, uri });
     }
 
     /// Update an agent's URI, public_key, and optionally metadata.
