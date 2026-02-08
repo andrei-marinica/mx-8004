@@ -3,49 +3,24 @@
 multiversx_sc::imports!();
 multiversx_sc::derive_imports!();
 
-#[type_abi]
-#[derive(
-    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
-)]
-pub struct MetadataEntry<M: ManagedTypeApi> {
-    pub key: ManagedBuffer<M>,
-    pub value: ManagedBuffer<M>,
-}
+pub mod errors;
+pub mod events;
+pub mod storage;
+pub mod structs;
+pub mod utils;
+pub mod views;
 
-#[type_abi]
-#[derive(
-    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
-)]
-pub struct AgentDetails<M: ManagedTypeApi> {
-    pub name: ManagedBuffer<M>,
-    pub uri: ManagedBuffer<M>,
-    pub public_key: ManagedBuffer<M>,
-    pub owner: ManagedAddress<M>,
-    pub metadata: ManagedVec<M, MetadataEntry<M>>,
-}
+pub use structs::*;
 
-#[type_abi]
-#[derive(
-    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
-)]
-pub struct AgentServiceConfig<M: ManagedTypeApi> {
-    pub token: EgldOrEsdtTokenIdentifier<M>,
-    pub pnonce: u64,
-    pub price: BigUint<M>,
-}
-
-#[type_abi]
-#[derive(
-    TopEncode, TopDecode, ManagedVecItem, NestedEncode, NestedDecode, Clone, PartialEq, Debug,
-)]
-pub struct AgentRegisteredEventData<M: ManagedTypeApi> {
-    pub name: ManagedBuffer<M>,
-    pub uri: ManagedBuffer<M>,
-}
+use errors::*;
 
 #[multiversx_sc::contract]
 pub trait IdentityRegistry:
     multiversx_sc_modules::default_issue_callbacks::DefaultIssueCallbacksModule
+    + storage::StorageModule
+    + views::ViewsModule
+    + events::EventsModule
+    + utils::UtilsModule
 {
     #[init]
     fn init(&self) {}
@@ -55,9 +30,9 @@ pub trait IdentityRegistry:
 
     #[only_owner]
     #[payable("EGLD")]
-    #[endpoint(issue_token)]
+    #[endpoint(issueToken)]
     fn issue_token(&self, token_display_name: ManagedBuffer, token_ticker: ManagedBuffer) {
-        require!(self.agent_token_id().is_empty(), "Token already issued");
+        require!(self.agent_token_id().is_empty(), ERR_TOKEN_ALREADY_ISSUED);
         let issue_cost = self.call_value().egld().clone_value();
 
         self.agent_token_id().issue_and_set_all_roles(
@@ -70,72 +45,59 @@ pub trait IdentityRegistry:
         );
     }
 
-    /// Register a new agent with name, URI, public key, and optional metadata entries.
-    ///
-    /// # Arguments
-    /// * `name` - Display name of the agent
-    /// * `uri` - URI pointing to the Agent Registration File (ARF) JSON
-    /// * `public_key` - Public key for signature verification
-    /// * `metadata` - Optional list of key-value metadata entries (EIP-8004 compatible)
+    /// Register a new agent with name, URI, public key, optional metadata, and optional service configs.
     #[allow_multiple_var_args]
-    #[endpoint(register_agent)]
+    #[endpoint(registerAgent)]
     fn register_agent(
         &self,
         name: ManagedBuffer,
         uri: ManagedBuffer,
         public_key: ManagedBuffer,
-        metadata: OptionalValue<ManagedVec<MetadataEntry<Self::Api>>>,
+        metadata: MultiValueEncodedCounted<MetadataEntry<Self::Api>>,
+        services: MultiValueEncodedCounted<ServiceConfigInput<Self::Api>>,
     ) {
-        require!(!self.agent_token_id().is_empty(), "Token not issued");
+        require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
 
         let caller = self.blockchain().get_caller();
         require!(
-            self.agent_id_by_address(&caller).is_empty(),
-            "Agent already registered for this address"
+            !self.agents().contains_value(&caller),
+            ERR_AGENT_ALREADY_REGISTERED
         );
-
-        let nonce = self.agent_token_nonce().update(|n| {
-            *n += 1;
-            *n
-        });
-
-        let mut metadata_vec = match metadata {
-            OptionalValue::Some(m) => m,
-            OptionalValue::None => ManagedVec::new(),
-        };
-
-        // If metadata is empty, add a default entry for price:0
-        if metadata_vec.is_empty() {
-            metadata_vec.push(MetadataEntry {
-                key: ManagedBuffer::from("price:0"),
-                value: ManagedBuffer::from(BigUint::from(0u64).to_bytes_be()),
-            });
-        }
 
         let details = AgentDetails {
             name: name.clone(),
-            uri: uri.clone(),
-            public_key: public_key.clone(),
-            owner: caller.clone(),
-            metadata: metadata_vec.clone(),
+            public_key,
         };
 
-        self.sync_pricing_metadata(nonce, &metadata_vec);
-
-        // Mint Soulbound NFT
-        self.send().esdt_nft_create(
+        // Mint soulbound NFT — proof of agent identity
+        let nonce = self.send().esdt_nft_create(
             &self.agent_token_id().get_token_id(),
             &BigUint::from(1u64),
             &name,
             &BigUint::from(0u64),
             &ManagedBuffer::new(),
             &details,
-            &self.create_uris_vec(uri.clone()),
+            &ManagedVec::from_single_item(uri.clone()),
         );
 
-        self.agent_id_by_address(&caller).set(nonce);
-        self.agent_owner(nonce).set(&caller);
-        self.agent_registered_event(&caller, nonce, AgentRegisteredEventData { name, uri });
+        // Store all data in storage mappers
+        self.agents().insert(nonce, caller.clone());
+        self.agent_details(nonce).set(&details);
+        self.agent_last_nonce().set(nonce);
+
+        // Store metadata if provided
+        self.sync_metadata(nonce, metadata);
+
+        self.sync_service_configs(nonce, services);
+
+        self.agent_registered_event(
+            &caller,
+            nonce,
+            AgentRegisteredEventData {
+                name: details.name,
+                uri: uri.clone(),
+            },
+        );
 
         // Send NFT to caller
         self.tx()
@@ -148,44 +110,50 @@ pub trait IdentityRegistry:
             .transfer();
     }
 
-    /// Update an agent's URI, public_key, and optionally metadata.
-    /// This follows the Transfer-Execute pattern: the owner sends the agent NFT to this endpoint.
-    /// The nonce is automatically extracted from the payment.
+    /// Update an agent's URI and/or public_key. Requires sending the agent NFT.
     #[payable("*")]
     #[allow_multiple_var_args]
-    #[endpoint(update_agent)]
+    #[endpoint(updateAgent)]
     fn update_agent(
         &self,
+        new_name: ManagedBuffer,
         new_uri: ManagedBuffer,
         new_public_key: ManagedBuffer,
-        metadata: OptionalValue<ManagedVec<MetadataEntry<Self::Api>>>,
+        signature: ManagedBuffer,
+        metadata: OptionalValue<MultiValueEncodedCounted<MetadataEntry<Self::Api>>>,
+        services: OptionalValue<MultiValueEncodedCounted<ServiceConfigInput<Self::Api>>>,
     ) {
-        require!(!self.agent_token_id().is_empty(), "Token not issued");
+        require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
 
         let payment = self.call_value().single_esdt();
         let token_id = self.agent_token_id().get_token_id();
-        require!(payment.token_identifier == token_id, "Invalid NFT sent");
+        require!(payment.token_identifier == token_id, ERR_INVALID_NFT);
 
         let nonce = payment.token_nonce;
         let caller = self.blockchain().get_caller();
+        let owner = self.agents().get_value(&nonce);
+        require!(caller == owner, ERR_NOT_OWNER);
 
-        let mut details: AgentDetails<Self::Api> =
-            self.blockchain().get_token_attributes(&token_id, nonce);
+        let hashed = self.crypto().sha256(new_public_key.clone());
+        self.crypto()
+            .verify_ed25519(&new_public_key, hashed.as_managed_buffer(), &signature);
 
-        // Optional updates: if not empty, update
-        if !new_uri.is_empty() {
-            details.uri = new_uri;
-        }
-        if !new_public_key.is_empty() {
-            details.public_key = new_public_key;
-        }
+        self.send().esdt_metadata_recreate(
+            token_id.clone(),
+            nonce,
+            new_name,
+            0,
+            new_public_key,
+            &ManagedBuffer::new(),
+            ManagedVec::from_single_item(new_uri),
+        );
+
         if let OptionalValue::Some(m) = metadata {
-            details.metadata = m;
-            self.sync_pricing_metadata(nonce, &details.metadata);
+            self.sync_metadata(nonce, m);
         }
-
-        self.send()
-            .nft_update_attributes(&token_id, nonce, &details);
+        if let OptionalValue::Some(configs) = services {
+            self.sync_service_configs(nonce, configs);
+        }
 
         // Send NFT back to caller
         self.tx()
@@ -193,195 +161,31 @@ pub trait IdentityRegistry:
             .single_esdt(&token_id, nonce, &BigUint::from(1u64))
             .transfer();
 
-        self.agent_updated_event(nonce, &details.uri);
+        self.agent_updated_event(nonce);
     }
 
-    /// Set or update specific metadata entries for an agent.
-    /// This merges with existing metadata (upsert behavior).
-    #[endpoint(set_metadata)]
-    fn set_metadata(&self, nonce: u64, entries: ManagedVec<MetadataEntry<Self::Api>>) {
-        require!(!self.agent_token_id().is_empty(), "Token not issued");
-
-        let caller = self.blockchain().get_caller();
-        let token_id = self.agent_token_id().get_token_id();
-
-        let mut details: AgentDetails<Self::Api> =
-            self.blockchain().get_token_attributes(&token_id, nonce);
-        require!(caller == details.owner, "Only owner can set metadata");
-
-        // Upsert: update existing keys, add new ones
-        for entry in entries.iter() {
-            let mut found = false;
-            let mut new_metadata = ManagedVec::new();
-            for existing in details.metadata.iter() {
-                if existing.key == entry.key {
-                    new_metadata.push(entry.clone());
-                    found = true;
-                } else {
-                    new_metadata.push(existing.clone());
-                }
-            }
-            if !found {
-                new_metadata.push(entry.clone());
-            }
-            details.metadata = new_metadata;
-        }
-
-        self.sync_pricing_metadata(nonce, &details.metadata);
-        self.send()
-            .nft_update_attributes(&token_id, nonce, &details);
-
+    /// Set or update metadata entries for an agent. O(1) per entry via MapMapper.
+    #[endpoint(setMetadata)]
+    fn set_metadata(
+        &self,
+        nonce: u64,
+        entries: MultiValueEncodedCounted<MetadataEntry<Self::Api>>,
+    ) {
+        require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
+        self.require_agent_owner(nonce);
+        self.sync_metadata(nonce, entries);
         self.metadata_updated_event(nonce);
     }
 
-    fn sync_pricing_metadata(&self, nonce: u64, metadata: &ManagedVec<MetadataEntry<Self::Api>>) {
-        let price_prefix = ManagedBuffer::from(b"price:");
-        let token_prefix = ManagedBuffer::from(b"token:");
-        let pnonce_prefix = ManagedBuffer::from(b"pnonce:");
-
-        for entry in metadata.iter() {
-            if entry.key.len() > price_prefix.len() {
-                let key_prefix = entry.key.copy_slice(0, price_prefix.len()).unwrap();
-                if key_prefix == price_prefix {
-                    let service_id = entry
-                        .key
-                        .copy_slice(price_prefix.len(), entry.key.len() - price_prefix.len())
-                        .unwrap();
-                    let price = BigUint::top_decode(entry.value.clone())
-                        .unwrap_or_else(|_| BigUint::zero());
-                    self.agent_service_price(nonce, &service_id).set(&price);
-                }
-            }
-
-            if entry.key.len() > token_prefix.len() {
-                let key_prefix = entry.key.copy_slice(0, token_prefix.len()).unwrap();
-                if key_prefix == token_prefix {
-                    let service_id = entry
-                        .key
-                        .copy_slice(token_prefix.len(), entry.key.len() - token_prefix.len())
-                        .unwrap();
-                    let token_id = EgldOrEsdtTokenIdentifier::top_decode(entry.value.clone())
-                        .unwrap_or_else(|_| EgldOrEsdtTokenIdentifier::egld());
-                    self.agent_service_payment_token(nonce, &service_id)
-                        .set(&token_id);
-                }
-            }
-
-            if entry.key.len() > pnonce_prefix.len() {
-                let key_prefix = entry.key.copy_slice(0, pnonce_prefix.len()).unwrap();
-                if key_prefix == pnonce_prefix {
-                    let service_id = entry
-                        .key
-                        .copy_slice(pnonce_prefix.len(), entry.key.len() - pnonce_prefix.len())
-                        .unwrap();
-                    let p_nonce = u64::top_decode(entry.value.clone()).unwrap_or(0);
-                    self.agent_service_payment_nonce(nonce, &service_id)
-                        .set(p_nonce);
-                }
-            }
-        }
-    }
-
-    /// Get a specific metadata value by key for an agent.
-    #[view(get_metadata)]
-    fn get_metadata(&self, nonce: u64, key: ManagedBuffer) -> OptionalValue<ManagedBuffer> {
-        let token_id = self.agent_token_id().get_token_id();
-        let details: AgentDetails<Self::Api> =
-            self.blockchain().get_token_attributes(&token_id, nonce);
-
-        for entry in details.metadata.iter() {
-            if entry.key == key {
-                return OptionalValue::Some(entry.value.clone());
-            }
-        }
-        OptionalValue::None
-    }
-
-    /// Get the complete payment configuration for a specific agent service in one call.
-    #[view(get_agent_service_config)]
-    fn get_agent_service_config(
+    /// Set or update service configurations for an agent.
+    #[endpoint(setServiceConfigs)]
+    fn set_service_configs_endpoint(
         &self,
         nonce: u64,
-        service_id: ManagedBuffer,
-    ) -> AgentServiceConfig<Self::Api> {
-        AgentServiceConfig {
-            token: self.agent_service_payment_token(nonce, &service_id).get(),
-            pnonce: self.agent_service_payment_nonce(nonce, &service_id).get(),
-            price: self.agent_service_price(nonce, &service_id).get(),
-        }
+        configs: MultiValueEncodedCounted<ServiceConfigInput<Self::Api>>,
+    ) {
+        require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
+        self.require_agent_owner(nonce);
+        self.sync_service_configs(nonce, configs);
     }
-
-    fn create_uris_vec(&self, uri: ManagedBuffer) -> ManagedVec<ManagedBuffer> {
-        let mut uris = ManagedVec::new();
-        uris.push(uri);
-        uris
-    }
-
-    #[view(get_agent)]
-    fn get_agent(&self, nonce: u64) -> AgentDetails<Self::Api> {
-        let token_id = self.agent_token_id().get_token_id();
-        self.blockchain().get_token_attributes(&token_id, nonce)
-    }
-
-    #[view(get_agent_id)]
-    fn get_agent_id(&self, address: ManagedAddress) -> u64 {
-        self.agent_id_by_address(&address).get()
-    }
-
-    // Events
-
-    #[event("agentRegistered")]
-    fn agent_registered_event(
-        &self,
-        #[indexed] owner: &ManagedAddress,
-        #[indexed] nonce: u64,
-        data: AgentRegisteredEventData<Self::Api>,
-    );
-
-    #[event("agentUpdated")]
-    fn agent_updated_event(&self, #[indexed] nonce: u64, uri: &ManagedBuffer);
-
-    #[event("metadataUpdated")]
-    fn metadata_updated_event(&self, #[indexed] nonce: u64);
-
-    // Storage Mappers
-
-    #[view(get_agent_token_id)]
-    #[storage_mapper("agentTokenId")]
-    fn agent_token_id(&self) -> NonFungibleTokenMapper;
-
-    #[view(agent_token_nonce)]
-    #[storage_mapper("agentTokenNonce")]
-    fn agent_token_nonce(&self) -> SingleValueMapper<u64>;
-
-    #[storage_mapper("agentIdByAddress")]
-    fn agent_id_by_address(&self, address: &ManagedAddress) -> SingleValueMapper<u64>;
-
-    #[view(get_agent_owner)]
-    #[storage_mapper("agentOwner")]
-    fn agent_owner(&self, nonce: u64) -> SingleValueMapper<ManagedAddress>;
-
-    #[view(get_agent_service_price)]
-    #[storage_mapper("agentServicePrice")]
-    fn agent_service_price(
-        &self,
-        nonce: u64,
-        service_id: &ManagedBuffer,
-    ) -> SingleValueMapper<BigUint>;
-
-    #[view(get_agent_service_payment_token)]
-    #[storage_mapper("agentServicePaymentToken")]
-    fn agent_service_payment_token(
-        &self,
-        nonce: u64,
-        service_id: &ManagedBuffer,
-    ) -> SingleValueMapper<EgldOrEsdtTokenIdentifier>;
-
-    #[view(get_agent_service_payment_nonce)]
-    #[storage_mapper("agentServicePaymentNonce")]
-    fn agent_service_payment_nonce(
-        &self,
-        nonce: u64,
-        service_id: &ManagedBuffer,
-    ) -> SingleValueMapper<u64>;
 }
