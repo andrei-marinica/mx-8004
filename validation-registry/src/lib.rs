@@ -3,28 +3,27 @@
 multiversx_sc::imports!();
 multiversx_sc::derive_imports!();
 
+pub mod config;
+pub mod errors;
+pub mod events;
+pub mod storage;
+pub mod structs;
+pub mod views;
+
+pub use structs::*;
+
+use errors::*;
+
 const THREE_DAYS: DurationMillis = DurationMillis::new(3 * 24 * 60 * 60 * 1000);
 
-#[type_abi]
-#[derive(TopEncode, TopDecode, NestedEncode, NestedDecode, PartialEq, Debug)]
-pub enum JobStatus {
-    New,
-    Pending,
-    Verified,
-}
-
-#[type_abi]
-#[derive(TopEncode, TopDecode, NestedEncode, NestedDecode, PartialEq, Debug)]
-pub struct JobData<M: ManagedTypeApi> {
-    pub status: JobStatus,
-    pub proof: ManagedBuffer<M>,
-    pub employer: ManagedAddress<M>,
-    pub creation_timestamp: TimestampMillis,
-    pub agent_nonce: u64,
-}
-
 #[multiversx_sc::contract]
-pub trait ValidationRegistry {
+pub trait ValidationRegistry:
+    common::cross_contract::CrossContractModule
+    + storage::ExternalStorageModule
+    + views::ViewsModule
+    + events::EventsModule
+    + config::ConfigModule
+{
     #[init]
     fn init(&self, identity_registry_address: ManagedAddress) {
         self.identity_registry_address()
@@ -34,130 +33,53 @@ pub trait ValidationRegistry {
     #[upgrade]
     fn upgrade(&self) {}
 
-    #[only_owner]
-    #[endpoint(set_identity_registry_address)]
-    fn set_identity_registry_address(&self, address: ManagedAddress) {
-        self.identity_registry_address().set(&address);
-    }
-
-    #[endpoint(init_job)]
-    fn init_job(&self, job_id: ManagedBuffer, agent_nonce: u64) {
+    #[payable("*")]
+    #[endpoint(initJob)]
+    fn init_job(&self, job_id: ManagedBuffer, agent_nonce: u64, service_id: OptionalValue<u32>) {
         let job_mapper = self.job_data(&job_id);
-        require!(job_mapper.is_empty(), "Job already initialized");
+        require!(job_mapper.is_empty(), ERR_JOB_ALREADY_INITIALIZED);
 
+        let caller = self.blockchain().get_caller();
         job_mapper.set(JobData {
             status: JobStatus::New,
             proof: ManagedBuffer::new(),
-            employer: self.blockchain().get_caller(),
+            employer: caller,
             creation_timestamp: self.blockchain().get_block_timestamp_millis(),
             agent_nonce,
         });
-    }
 
-    /// Optimized job initialization with payment.
-    /// Uses direct storage reads from IdentityRegistry for maximum performance.
-    #[payable("*")]
-    #[endpoint(init_job_with_payment)]
-    fn init_job_with_payment(
-        &self,
-        job_id: ManagedBuffer,
-        agent_nonce: u64,
-        service_id: ManagedBuffer,
-    ) {
-        let job_mapper = self.job_data(&job_id);
-        require!(job_mapper.is_empty(), "Job already initialized");
+        // If service_id provided, validate payment and forward to agent owner
+        if let OptionalValue::Some(sid) = service_id {
+            let identity_addr = self.identity_registry_address().get();
+            let agent_owner = self
+                .external_agents(identity_addr.clone())
+                .get_value(&agent_nonce);
 
-        let identity_addr = self.identity_registry_address().get();
+            let service_config_map = self.external_agent_service_config(identity_addr, agent_nonce);
 
-        // Resolve agent owner and price via direct storage access
-        let agent_owner: ManagedAddress =
-            self.read_owner_from_identity(&identity_addr, agent_nonce);
-        let required_price: BigUint =
-            self.read_price_from_identity(&identity_addr, agent_nonce, &service_id);
-        let required_token: EgldOrEsdtTokenIdentifier =
-            self.read_token_from_identity(&identity_addr, agent_nonce, &service_id);
-        let required_pnonce: u64 =
-            self.read_pnonce_from_identity(&identity_addr, agent_nonce, &service_id);
+            if let Some(service_payment) = service_config_map.get(&sid) {
+                let pay = self.call_value().single();
 
-        let payment = self.call_value().all();
+                require!(
+                    pay.token_identifier == service_payment.token_identifier
+                        && pay.token_nonce == service_payment.token_nonce,
+                    ERR_INVALID_PAYMENT
+                );
 
-        let mut total_paid = BigUint::zero();
-        if required_token.is_egld() {
-            total_paid = self.call_value().egld().clone_value();
-        } else {
-            for pay in payment.iter() {
-                let pay_token = EgldOrEsdtTokenIdentifier::esdt(pay.token_identifier.clone());
-                if pay_token == required_token && pay.token_nonce == required_pnonce {
-                    total_paid += pay.amount.clone().into_big_uint();
-                }
+                require!(
+                    pay.amount >= service_payment.amount,
+                    ERR_INSUFFICIENT_PAYMENT
+                );
+
+                self.tx().to(&agent_owner).payment(pay).transfer();
             }
         }
-
-        require!(total_paid >= required_price, "Insufficient payment");
-
-        // Register the job FIRST (Effect)
-        job_mapper.set(JobData {
-            status: JobStatus::New,
-            proof: ManagedBuffer::new(),
-            employer: self.blockchain().get_caller(),
-            creation_timestamp: self.blockchain().get_block_timestamp_millis(),
-            agent_nonce,
-        });
-
-        // Forward payment to agent owner LAST (Interaction)
-        self.tx().to(&agent_owner).payment(payment).transfer();
     }
 
-    fn read_owner_from_identity(&self, addr: &ManagedAddress, nonce: u64) -> ManagedAddress {
-        let mut key = ManagedBuffer::from(b"agentOwner");
-        let _ = nonce.dep_encode(&mut key);
-
-        self.storage_raw().read_from_address(addr, key)
-    }
-
-    fn read_price_from_identity(
-        &self,
-        addr: &ManagedAddress,
-        nonce: u64,
-        service_id: &ManagedBuffer,
-    ) -> BigUint {
-        let mut key = ManagedBuffer::from(b"agentServicePrice");
-        let _ = nonce.dep_encode(&mut key);
-        let _ = service_id.dep_encode(&mut key);
-
-        self.storage_raw().read_from_address(addr, key)
-    }
-
-    fn read_token_from_identity(
-        &self,
-        addr: &ManagedAddress,
-        nonce: u64,
-        service_id: &ManagedBuffer,
-    ) -> EgldOrEsdtTokenIdentifier {
-        let mut key = ManagedBuffer::from(b"agentServicePaymentToken");
-        let _ = nonce.dep_encode(&mut key);
-        let _ = service_id.dep_encode(&mut key);
-
-        self.storage_raw().read_from_address(addr, key)
-    }
-
-    fn read_pnonce_from_identity(
-        &self,
-        addr: &ManagedAddress,
-        nonce: u64,
-        service_id: &ManagedBuffer,
-    ) -> u64 {
-        let mut key = ManagedBuffer::from(b"agentServicePaymentNonce");
-        let _ = nonce.dep_encode(&mut key);
-        let _ = service_id.dep_encode(&mut key);
-
-        self.storage_raw().read_from_address(addr, key)
-    }
-
-    #[endpoint(submit_proof)]
+    #[endpoint(submitProof)]
     fn submit_proof(&self, job_id: ManagedBuffer, proof: ManagedBuffer) {
         let job_mapper = self.job_data(&job_id);
-        require!(!job_mapper.is_empty(), "Job does not exist");
+        require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
 
         job_mapper.update(|job| {
             job.proof = proof;
@@ -166,10 +88,10 @@ pub trait ValidationRegistry {
     }
 
     #[only_owner]
-    #[endpoint(verify_job)]
+    #[endpoint(verifyJob)]
     fn verify_job(&self, job_id: ManagedBuffer) {
         let job_mapper = self.job_data(&job_id);
-        require!(!job_mapper.is_empty(), "Job does not exist");
+        require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
 
         job_mapper.update(|job| {
             job.status = JobStatus::Verified;
@@ -177,7 +99,7 @@ pub trait ValidationRegistry {
         });
     }
 
-    #[endpoint(clean_old_jobs)]
+    #[endpoint(cleanOldJobs)]
     fn clean_old_jobs(&self, job_ids: MultiValueEncoded<ManagedBuffer>) {
         let current_time = self.blockchain().get_block_timestamp_millis();
         for job_id in job_ids {
@@ -191,36 +113,4 @@ pub trait ValidationRegistry {
             }
         }
     }
-
-    #[view(is_job_verified)]
-    fn is_job_verified(&self, job_id: ManagedBuffer) -> bool {
-        let job_mapper = self.job_data(&job_id);
-        !job_mapper.is_empty() && job_mapper.get().status == JobStatus::Verified
-    }
-
-    #[view(get_job_data)]
-    fn get_job_data(&self, job_id: ManagedBuffer) -> OptionalValue<JobData<Self::Api>> {
-        let job_mapper = self.job_data(&job_id);
-        if job_mapper.is_empty() {
-            OptionalValue::None
-        } else {
-            OptionalValue::Some(job_mapper.get())
-        }
-    }
-
-    // Events
-    #[event("jobVerified")]
-    fn job_verified_event(
-        &self,
-        #[indexed] job_id: ManagedBuffer,
-        #[indexed] agent_nonce: u64,
-        status: JobStatus,
-    );
-
-    // Storage Mappers
-    #[storage_mapper("jobData")]
-    fn job_data(&self, job_id: &ManagedBuffer) -> SingleValueMapper<JobData<Self::Api>>;
-
-    #[storage_mapper("identityRegistryAddress")]
-    fn identity_registry_address(&self) -> SingleValueMapper<ManagedAddress>;
 }
