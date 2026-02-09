@@ -16,27 +16,27 @@ Manages agent identities as soulbound (non-transferable) NFTs.
 |---|---|---|
 | `init()` | deploy | No-op constructor |
 | `upgrade()` | upgrade | No-op |
-| `issueToken(name, ticker)` | owner, payable EGLD | Issues the NFT collection; can only be called once |
-| `registerAgent(name, uri, public_key, metadata?, services?)` | anyone | Mints soulbound NFT, stores agent data, sends NFT to caller |
-| `updateAgent(new_name, new_uri, new_public_key, signature, metadata?, services?)` | agent owner, payable NFT | Transfer-execute: send NFT in, verify Ed25519 signature over `sha256(new_public_key)`, update on-chain data via `esdt_metadata_recreate`, return NFT |
-| `setMetadata(nonce, entries)` | agent owner | Upsert key-value metadata in `MapMapper` |
-| `setServiceConfigs(nonce, configs)` | agent owner | Upsert service pricing in `MapMapper<u32, Payment>`. `price = 0` removes the service |
-| `removeMetadata(nonce, keys)` | agent owner | Remove metadata entries by key (`MultiValueEncoded<ManagedBuffer>`) |
-| `removeServiceConfigs(nonce, service_ids)` | agent owner | Remove service configs by ID (`MultiValueEncoded<u32>`) |
+| `issue_token(name, ticker)` | owner, payable EGLD | Issues the NFT collection; can only be called once |
+| `register_agent(name, uri, public_key, metadata?, services?)` | anyone | Mints soulbound NFT, stores agent data, sends NFT to caller |
+| `update_agent(new_name, new_uri, new_public_key, signature, metadata?, services?)` | agent owner, payable NFT | Transfer-execute: send NFT in, verify Ed25519 signature over `sha256(new_public_key)`, update on-chain data via `esdt_metadata_recreate`, return NFT |
+| `set_metadata(nonce, entries)` | agent owner | Upsert key-value metadata in `MapMapper` |
+| `set_service_configs(nonce, configs)` | agent owner | Upsert service pricing in `MapMapper<u32, Payment>`. `price = 0` removes the service |
+| `remove_metadata(nonce, keys)` | agent owner | Remove metadata entries by key (`MultiValueEncoded<ManagedBuffer>`) |
+| `remove_service_configs(nonce, service_ids)` | agent owner | Remove service configs by ID (`MultiValueEncoded<u32>`) |
 
 ### 1.2 Views
 
 | View | Returns |
 |---|---|
-| `getAgent(nonce)` | `AgentDetails { name, public_key }` |
-| `getAgentOwner(nonce)` | `ManagedAddress` |
-| `getMetadata(nonce, key)` | `OptionalValue<ManagedBuffer>` |
-| `getAgentServiceConfig(nonce, service_id)` | `OptionalValue<EgldOrEsdtTokenPayment>` |
-| `getAgentTokenId()` | `NonFungibleTokenMapper` (raw) |
-| `getAgentId()` | `BiDiMapper<u64, ManagedAddress>` (raw) |
-| `getAgentDetails(nonce)` | `SingleValueMapper<AgentDetails>` (raw) |
-| `getAgentMetadata(nonce)` | `MapMapper<ManagedBuffer, ManagedBuffer>` (raw) |
-| `getAgentService(nonce)` | `MapMapper<u32, Payment>` (raw) |
+| `get_agent(nonce)` | `AgentDetails { name, public_key }` |
+| `get_agent_owner(nonce)` | `ManagedAddress` |
+| `get_metadata(nonce, key)` | `OptionalValue<ManagedBuffer>` |
+| `get_agent_service_config(nonce, service_id)` | `OptionalValue<EgldOrEsdtTokenPayment>` |
+| `get_agent_token_id()` | `NonFungibleTokenMapper` (raw) |
+| `get_agent_id()` | `BiDiMapper<u64, ManagedAddress>` (raw) |
+| `get_agent_details(nonce)` | `SingleValueMapper<AgentDetails>` (raw) |
+| `get_agent_metadata(nonce)` | `MapMapper<ManagedBuffer, ManagedBuffer>` (raw) |
+| `get_agent_service(nonce)` | `MapMapper<u32, Payment>` (raw) |
 
 ### 1.3 Storage
 
@@ -67,18 +67,18 @@ Handles job lifecycle: initialization, proof submission, verification, and clean
 |---|---|---|
 | `init(identity_registry_address)` | deploy | Stores identity registry address |
 | `upgrade()` | upgrade | No-op |
-| `initJob(job_id, agent_nonce, service_id?)` | anyone, payable | Creates job with `New` status. If `service_id` provided, reads agent's service config from identity registry via cross-contract storage, validates payment token/nonce, requires `amount >= price`, and forwards payment to agent owner |
-| `submitProof(job_id, proof)` | anyone | Sets proof data and transitions status `New -> Pending` |
-| `verifyJob(job_id)` | owner only | Transitions status `Pending -> Verified`, emits event |
-| `cleanOldJobs(job_ids)` | anyone | Removes jobs older than 3 days (259,200,000 ms) |
-| `setIdentityRegistryAddress(address)` | owner only | Update identity registry address |
+| `init_job(job_id, agent_nonce, service_id?)` | anyone, payable | Creates job with `New` status. If `service_id` provided, reads agent's service config from identity registry via cross-contract storage, validates payment token/nonce, requires `amount >= price`, and forwards payment to agent owner |
+| `submit_proof(job_id, proof)` | anyone | Sets proof data and transitions status `New -> Pending` |
+| `verify_job(job_id)` | owner only | Transitions status `Pending -> Verified`, emits event |
+| `clean_old_jobs(job_ids)` | anyone | Removes jobs older than 3 days (259,200,000 ms) |
+| `set_identity_registry_address(address)` | owner only | Update identity registry address |
 
 ### 2.2 Views
 
 | View | Returns |
 |---|---|
-| `isJobVerified(job_id)` | `bool` |
-| `getJobData(job_id)` | `OptionalValue<JobData>` |
+| `is_job_verified(job_id)` | `bool` |
+| `get_job_data(job_id)` | `OptionalValue<JobData>` |
 
 ### 2.3 Storage
 
@@ -103,23 +103,23 @@ Collects feedback on verified jobs with authorization gates and cumulative scori
 |---|---|---|
 | `init(validation_addr, identity_addr)` | deploy | Stores both contract addresses |
 | `upgrade()` | upgrade | No-op |
-| `submitFeedback(job_id, agent_nonce, rating)` | employer only | Validates: (1) job exists and is `Verified` via cross-contract read, (2) caller is employer, (3) agent owner authorized this feedback, (4) no duplicate feedback. Updates cumulative moving average score |
-| `authorizeFeedback(job_id, client)` | agent owner | Agent owner authorizes a specific client address to submit feedback for a job |
-| `appendResponse(job_id, response_uri)` | agent owner | Agent owner attaches a response URI to a job |
-| `setIdentityContractAddress(address)` | owner only | Update identity registry address |
-| `setValidationContractAddress(address)` | owner only | Update validation registry address |
+| `submit_feedback(job_id, agent_nonce, rating)` | employer only | Validates: (1) job exists and is `Verified` via cross-contract read, (2) caller is employer, (3) agent owner authorized this feedback, (4) no duplicate feedback. Updates cumulative moving average score |
+| `authorize_feedback(job_id, client)` | agent owner | Agent owner authorizes a specific client address to submit feedback for a job |
+| `append_response(job_id, response_uri)` | agent owner | Agent owner attaches a response URI to a job |
+| `set_identity_contract_address(address)` | owner only | Update identity registry address |
+| `set_validation_contract_address(address)` | owner only | Update validation registry address |
 
 ### 3.2 Views
 
 | View | Returns |
 |---|---|
-| `getReputationScore(agent_nonce)` | `BigUint` |
-| `getTotalJobs(agent_nonce)` | `u64` |
-| `hasGivenFeedback(job_id)` | `bool` |
-| `isFeedbackAuthorized(job_id, client)` | `bool` |
-| `getAgentResponse(job_id)` | `ManagedBuffer` |
-| `getValidationContractAddress()` | `ManagedAddress` |
-| `getIdentityContractAddress()` | `ManagedAddress` |
+| `get_reputation_score(agent_nonce)` | `BigUint` |
+| `get_total_jobs(agent_nonce)` | `u64` |
+| `has_given_feedback(job_id)` | `bool` |
+| `is_feedback_authorized(job_id, client)` | `bool` |
+| `get_agent_response(job_id)` | `ManagedBuffer` |
+| `get_validation_contract_address()` | `ManagedAddress` |
+| `get_identity_contract_address()` | `ManagedAddress` |
 
 ### 3.3 Storage
 
@@ -205,16 +205,16 @@ Defined in `common::cross_contract::CrossContractModule`.
 ## 6. Contract Interaction Flow
 
 ```
-1. Owner deploys Identity Registry, calls issueToken()
+1. Owner deploys Identity Registry, calls issue_token()
 2. Owner deploys Validation Registry with identity registry address
 3. Owner deploys Reputation Registry with both addresses
 
 Agent Lifecycle:
-4. Agent calls registerAgent() -> receives soulbound NFT
-5. Client calls initJob(job_id, agent_nonce, service_id) with payment -> payment forwarded to agent owner
-6. Worker calls submitProof(job_id, proof) -> job status: Pending
-7. Contract owner calls verifyJob(job_id) -> job status: Verified
-8. Agent owner calls authorizeFeedback(job_id, client_address)
-9. Client calls submitFeedback(job_id, agent_nonce, rating) -> reputation score updated
-10. Agent owner optionally calls appendResponse(job_id, uri)
+4. Agent calls register_agent() -> receives soulbound NFT
+5. Client calls init_job(job_id, agent_nonce, service_id) with payment -> payment forwarded to agent owner
+6. Worker calls submit_proof(job_id, proof) -> job status: Pending
+7. Contract owner calls verify_job(job_id) -> job status: Verified
+8. Agent owner calls authorize_feedback(job_id, client_address)
+9. Client calls submit_feedback(job_id, agent_nonce, rating) -> reputation score updated
+10. Agent owner optionally calls append_response(job_id, uri)
 ```

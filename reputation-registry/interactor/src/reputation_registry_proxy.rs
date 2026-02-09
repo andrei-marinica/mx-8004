@@ -100,7 +100,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("submitFeedback")
+            .raw_call("submit_feedback")
             .argument(&job_id)
             .argument(&agent_nonce)
             .argument(&rating)
@@ -117,7 +117,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("authorizeFeedback")
+            .raw_call("authorize_feedback")
             .argument(&job_id)
             .argument(&client)
             .original_result()
@@ -133,7 +133,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("appendResponse")
+            .raw_call("append_response")
             .argument(&job_id)
             .argument(&response_uri)
             .original_result()
@@ -147,7 +147,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, BigUint<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getReputationScore")
+            .raw_call("get_reputation_score")
             .argument(&agent_nonce)
             .original_result()
     }
@@ -160,7 +160,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, u64> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getTotalJobs")
+            .raw_call("get_total_jobs")
             .argument(&agent_nonce)
             .original_result()
     }
@@ -170,7 +170,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ManagedAddress<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getValidationContractAddress")
+            .raw_call("get_validation_contract_address")
             .original_result()
     }
 
@@ -179,7 +179,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ManagedAddress<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getIdentityContractAddress")
+            .raw_call("get_identity_contract_address")
             .original_result()
     }
 
@@ -191,7 +191,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, bool> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("hasGivenFeedback")
+            .raw_call("has_given_feedback")
             .argument(&job_id)
             .original_result()
     }
@@ -206,7 +206,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, bool> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("isFeedbackAuthorized")
+            .raw_call("is_feedback_authorized")
             .argument(&job_id)
             .argument(&client)
             .original_result()
@@ -220,7 +220,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ManagedBuffer<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentResponse")
+            .raw_call("get_agent_response")
             .argument(&job_id)
             .original_result()
     }
@@ -233,7 +233,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("setIdentityContractAddress")
+            .raw_call("set_identity_contract_address")
             .argument(&address)
             .original_result()
     }
@@ -246,7 +246,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("setValidationContractAddress")
+            .raw_call("set_validation_contract_address")
             .argument(&address)
             .original_result()
     }

@@ -34,7 +34,7 @@ pub trait ValidationRegistry:
     fn upgrade(&self) {}
 
     #[payable("*")]
-    #[endpoint(initJob)]
+    #[endpoint(init_job)]
     fn init_job(&self, job_id: ManagedBuffer, agent_nonce: u64, service_id: OptionalValue<u32>) {
         let job_mapper = self.job_data(&job_id);
         require!(job_mapper.is_empty(), ERR_JOB_ALREADY_INITIALIZED);
@@ -76,7 +76,7 @@ pub trait ValidationRegistry:
         }
     }
 
-    #[endpoint(submitProof)]
+    #[endpoint(submit_proof)]
     fn submit_proof(&self, job_id: ManagedBuffer, proof: ManagedBuffer) {
         let job_mapper = self.job_data(&job_id);
         require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
@@ -88,7 +88,7 @@ pub trait ValidationRegistry:
     }
 
     #[only_owner]
-    #[endpoint(verifyJob)]
+    #[endpoint(verify_job)]
     fn verify_job(&self, job_id: ManagedBuffer) {
         let job_mapper = self.job_data(&job_id);
         require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
@@ -99,7 +99,7 @@ pub trait ValidationRegistry:
         });
     }
 
-    #[endpoint(cleanOldJobs)]
+    #[endpoint(clean_old_jobs)]
     fn clean_old_jobs(&self, job_ids: MultiValueEncoded<ManagedBuffer>) {
         let current_time = self.blockchain().get_block_timestamp_millis();
         for job_id in job_ids {

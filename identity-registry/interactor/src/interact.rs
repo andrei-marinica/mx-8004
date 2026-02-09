@@ -24,71 +24,71 @@ pub async fn identity_registry_cli() {
     match cmd.as_str() {
         "deploy" => interact.deploy().await,
         "upgrade" => interact.upgrade().await,
-        "issueToken" => interact.issue_token().await,
-        "registerAgent" => interact.register_agent().await,
-        "updateAgent" => interact.update_agent().await,
-        "setMetadata" => interact.set_metadata().await,
-        "setServiceConfigs" => interact.set_service_configs_endpoint().await,
-        "removeMetadata" => interact.remove_metadata().await,
-        "removeServiceConfigs" => interact.remove_service_configs().await,
-        "getAgentTokenId" => interact.agent_token_id().await,
-        "getAgentId" => interact.agents().await,
-        "getAgentDetails" => interact.agent_details().await,
-        "getAgentMetadata" => interact.agent_metadata().await,
-        "getAgentService" => interact.agent_service_config().await,
-        "getAgent" => interact.get_agent().await,
-        "getAgentOwner" => interact.get_agent_owner().await,
-        "getMetadata" => interact.get_metadata().await,
-        "getAgentServiceConfig" => interact.get_agent_service_config().await,
+        "issue_token" => interact.issue_token().await,
+        "register_agent" => interact.register_agent().await,
+        "update_agent" => interact.update_agent().await,
+        "set_metadata" => interact.set_metadata().await,
+        "set_service_configs" => interact.set_service_configs_endpoint().await,
+        "remove_metadata" => interact.remove_metadata().await,
+        "remove_service_configs" => interact.remove_service_configs().await,
+        "get_agent_token_id" => interact.agent_token_id().await,
+        "get_agent_id" => interact.agents().await,
+        "get_agent_details" => interact.agent_details().await,
+        "get_agent_metadata" => interact.agent_metadata().await,
+        "get_agent_service" => interact.agent_service_config().await,
+        "get_agent" => interact.get_agent().await,
+        "get_agent_owner" => interact.get_agent_owner().await,
+        "get_metadata" => interact.get_metadata().await,
+        "get_agent_service_config" => interact.get_agent_service_config().await,
         _ => panic!("unknown command: {}", &cmd),
     }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct State {
-    contract_address: Option<Bech32Address>
+    contract_address: Option<Bech32Address>,
 }
 
 impl State {
-        // Deserializes state from file
-        pub fn load_state() -> Self {
-            if Path::new(STATE_FILE).exists() {
-                let mut file = std::fs::File::open(STATE_FILE).unwrap();
-                let mut content = String::new();
-                file.read_to_string(&mut content).unwrap();
-                toml::from_str(&content).unwrap()
-            } else {
-                Self::default()
-            }
-        }
-    
-        /// Sets the contract address
-        pub fn set_address(&mut self, address: Bech32Address) {
-            self.contract_address = Some(address);
-        }
-    
-        /// Returns the contract address
-        pub fn current_address(&self) -> &Bech32Address {
-            self.contract_address
-                .as_ref()
-                .expect("no known contract, deploy first")
+    // Deserializes state from file
+    pub fn load_state() -> Self {
+        if Path::new(STATE_FILE).exists() {
+            let mut file = std::fs::File::open(STATE_FILE).unwrap();
+            let mut content = String::new();
+            file.read_to_string(&mut content).unwrap();
+            toml::from_str(&content).unwrap()
+        } else {
+            Self::default()
         }
     }
-    
-    impl Drop for State {
-        // Serializes state to file
-        fn drop(&mut self) {
-            let mut file = std::fs::File::create(STATE_FILE).unwrap();
-            file.write_all(toml::to_string(self).unwrap().as_bytes())
-                .unwrap();
-        }
+
+    /// Sets the contract address
+    pub fn set_address(&mut self, address: Bech32Address) {
+        self.contract_address = Some(address);
     }
+
+    /// Returns the contract address
+    pub fn current_address(&self) -> &Bech32Address {
+        self.contract_address
+            .as_ref()
+            .expect("no known contract, deploy first")
+    }
+}
+
+impl Drop for State {
+    // Serializes state to file
+    fn drop(&mut self) {
+        let mut file = std::fs::File::create(STATE_FILE).unwrap();
+        file.write_all(toml::to_string(self).unwrap().as_bytes())
+            .unwrap();
+    }
+}
 
 pub struct ContractInteract {
     interactor: Interactor,
     wallet_address: Address,
     contract_code: BytesValue,
-    state: State
+    state: State,
 }
 
 impl ContractInteract {
@@ -103,7 +103,7 @@ impl ContractInteract {
         // Useful in the chain simulator setting
         // generate blocks until ESDTSystemSCAddress is enabled
         interactor.generate_blocks_until_all_activations().await;
-        
+
         let contract_code = BytesValue::interpret_from(
             "mxsc:../output/identity-registry.mxsc.json",
             &InterpreterContext::default(),
@@ -113,7 +113,7 @@ impl ContractInteract {
             interactor,
             wallet_address,
             contract_code,
-            state: State::load_state()
+            state: State::load_state(),
         }
     }
 
@@ -215,8 +215,19 @@ impl ContractInteract {
             .to(self.state.current_address())
             .gas(30_000_000u64)
             .typed(identity_registry_proxy::IdentityRegistryProxy)
-            .update_agent(new_name, new_uri, new_public_key, signature, metadata, services)
-            .payment((EsdtTokenIdentifier::from(token_id.as_str()), token_nonce, token_amount))
+            .update_agent(
+                new_name,
+                new_uri,
+                new_public_key,
+                signature,
+                metadata,
+                services,
+            )
+            .payment((
+                EsdtTokenIdentifier::from(token_id.as_str()),
+                token_nonce,
+                token_amount,
+            ))
             .returns(ReturnsResultUnmanaged)
             .run()
             .await;
@@ -441,5 +452,4 @@ impl ContractInteract {
 
         println!("Result: {result_value:?}");
     }
-
 }

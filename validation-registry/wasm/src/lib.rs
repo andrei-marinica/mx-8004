@@ -20,13 +20,13 @@ multiversx_sc_wasm_adapter::endpoints! {
     (
         init => init
         upgrade => upgrade
-        initJob => init_job
-        submitProof => submit_proof
-        verifyJob => verify_job
-        cleanOldJobs => clean_old_jobs
-        isJobVerified => is_job_verified
-        getJobData => get_job_data
-        setIdentityRegistryAddress => set_identity_registry_address
+        init_job => init_job
+        submit_proof => submit_proof
+        verify_job => verify_job
+        clean_old_jobs => clean_old_jobs
+        is_job_verified => is_job_verified
+        get_job_data => get_job_data
+        set_identity_registry_address => set_identity_registry_address
     )
 }
 

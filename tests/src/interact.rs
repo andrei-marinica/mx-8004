@@ -1,7 +1,5 @@
 use common::structs::{MetadataEntry, ServiceConfigInput};
-use multiversx_sc::types::{
-    BigUint, ManagedAddress, ManagedArgBuffer, ManagedBuffer, TokenId,
-};
+use multiversx_sc::types::{BigUint, ManagedAddress, ManagedArgBuffer, ManagedBuffer, TokenId};
 use multiversx_sc_scenario::imports::ExpectError;
 use multiversx_sc_snippets::imports::*;
 use proxies::{
@@ -30,9 +28,7 @@ pub struct CsInteract {
 
 impl CsInteract {
     pub async fn new() -> Self {
-        let mut interactor = Interactor::new(GATEWAY)
-            .await
-            .use_chain_simulator(true);
+        let mut interactor = Interactor::new(GATEWAY).await.use_chain_simulator(true);
 
         interactor.set_current_dir_from_workspace("tests");
 
@@ -149,13 +145,7 @@ impl CsInteract {
 
     // ── Register Agent (raw call for Counted encoding) ──
 
-    pub async fn register_agent(
-        &mut self,
-        from: &Address,
-        name: &[u8],
-        uri: &[u8],
-        pubkey: &[u8],
-    ) {
+    pub async fn register_agent(&mut self, from: &Address, name: &[u8], uri: &[u8], pubkey: &[u8]) {
         let mut args = ManagedArgBuffer::<StaticApi>::new();
         args.push_arg(ManagedBuffer::<StaticApi>::from(name));
         args.push_arg(ManagedBuffer::<StaticApi>::from(uri));
@@ -170,7 +160,7 @@ impl CsInteract {
             .from(from)
             .to(&self.identity_addr)
             .gas(30_000_000u64)
-            .raw_call("registerAgent")
+            .raw_call("register_agent")
             .arguments_raw(args)
             .returns(ReturnsResultUnmanaged)
             .run()
@@ -212,7 +202,7 @@ impl CsInteract {
             .from(from)
             .to(&self.identity_addr)
             .gas(30_000_000u64)
-            .raw_call("registerAgent")
+            .raw_call("register_agent")
             .arguments_raw(args)
             .returns(ReturnsResultUnmanaged)
             .run()
@@ -440,7 +430,7 @@ impl CsInteract {
             .from(from)
             .to(&self.identity_addr)
             .gas(30_000_000u64)
-            .raw_call("registerAgent")
+            .raw_call("register_agent")
             .arguments_raw(args)
             .returns(ExpectError(err_code, err_msg))
             .run()
@@ -513,11 +503,7 @@ impl CsInteract {
             .await;
     }
 
-    pub async fn issue_token_expect_err(
-        &mut self,
-        err_code: u64,
-        err_msg: &str,
-    ) {
+    pub async fn issue_token_expect_err(&mut self, err_code: u64, err_msg: &str) {
         self.interactor
             .tx()
             .from(&self.owner)

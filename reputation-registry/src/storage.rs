@@ -7,27 +7,27 @@ pub use common::structs::{JobData, JobStatus};
 pub trait StorageModule: common::cross_contract::CrossContractModule {
     // ── Local storage ──
 
-    #[view(getReputationScore)]
+    #[view(get_reputation_score)]
     #[storage_mapper("reputationScore")]
     fn reputation_score(&self, agent_nonce: u64) -> SingleValueMapper<BigUint>;
 
-    #[view(getTotalJobs)]
+    #[view(get_total_jobs)]
     #[storage_mapper("totalJobs")]
     fn total_jobs(&self, agent_nonce: u64) -> SingleValueMapper<u64>;
 
-    #[view(getValidationContractAddress)]
+    #[view(get_validation_contract_address)]
     #[storage_mapper("validationContractAddress")]
     fn validation_contract_address(&self) -> SingleValueMapper<ManagedAddress>;
 
-    #[view(getIdentityContractAddress)]
+    #[view(get_identity_contract_address)]
     #[storage_mapper("identityContractAddress")]
     fn identity_contract_address(&self) -> SingleValueMapper<ManagedAddress>;
 
-    #[view(hasGivenFeedback)]
+    #[view(has_given_feedback)]
     #[storage_mapper("hasGivenFeedback")]
     fn has_given_feedback(&self, job_id: ManagedBuffer) -> SingleValueMapper<bool>;
 
-    #[view(isFeedbackAuthorized)]
+    #[view(is_feedback_authorized)]
     #[storage_mapper("isFeedbackAuthorized")]
     fn is_feedback_authorized(
         &self,
@@ -35,7 +35,7 @@ pub trait StorageModule: common::cross_contract::CrossContractModule {
         client: ManagedAddress,
     ) -> SingleValueMapper<bool>;
 
-    #[view(getAgentResponse)]
+    #[view(get_agent_response)]
     #[storage_mapper("agentResponse")]
     fn agent_response(&self, job_id: ManagedBuffer) -> SingleValueMapper<ManagedBuffer>;
 }

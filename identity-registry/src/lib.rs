@@ -30,7 +30,7 @@ pub trait IdentityRegistry:
 
     #[only_owner]
     #[payable("EGLD")]
-    #[endpoint(issueToken)]
+    #[endpoint(issue_token)]
     fn issue_token(&self, token_display_name: ManagedBuffer, token_ticker: ManagedBuffer) {
         require!(self.agent_token_id().is_empty(), ERR_TOKEN_ALREADY_ISSUED);
         let issue_cost = self.call_value().egld().clone_value();
@@ -47,7 +47,7 @@ pub trait IdentityRegistry:
 
     /// Register a new agent with name, URI, public key, optional metadata, and optional service configs.
     #[allow_multiple_var_args]
-    #[endpoint(registerAgent)]
+    #[endpoint(register_agent)]
     fn register_agent(
         &self,
         name: ManagedBuffer,
@@ -112,7 +112,7 @@ pub trait IdentityRegistry:
     /// Update an agent's URI and/or public_key. Requires sending the agent NFT.
     #[payable("*")]
     #[allow_multiple_var_args]
-    #[endpoint(updateAgent)]
+    #[endpoint(update_agent)]
     fn update_agent(
         &self,
         new_name: ManagedBuffer,
@@ -159,7 +159,7 @@ pub trait IdentityRegistry:
     }
 
     /// Set or update metadata entries for an agent. O(1) per entry via MapMapper.
-    #[endpoint(setMetadata)]
+    #[endpoint(set_metadata)]
     fn set_metadata(
         &self,
         nonce: u64,
@@ -172,7 +172,7 @@ pub trait IdentityRegistry:
     }
 
     /// Set or update service configurations for an agent.
-    #[endpoint(setServiceConfigs)]
+    #[endpoint(set_service_configs)]
     fn set_service_configs_endpoint(
         &self,
         nonce: u64,
@@ -185,7 +185,7 @@ pub trait IdentityRegistry:
     }
 
     /// Remove metadata entries by key.
-    #[endpoint(removeMetadata)]
+    #[endpoint(remove_metadata)]
     fn remove_metadata(&self, nonce: u64, keys: MultiValueEncoded<ManagedBuffer>) {
         require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
         self.require_agent_owner(nonce);
@@ -197,7 +197,7 @@ pub trait IdentityRegistry:
     }
 
     /// Remove service configurations by service ID.
-    #[endpoint(removeServiceConfigs)]
+    #[endpoint(remove_service_configs)]
     fn remove_service_configs(&self, nonce: u64, service_ids: MultiValueEncoded<u32>) {
         require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
         self.require_agent_owner(nonce);

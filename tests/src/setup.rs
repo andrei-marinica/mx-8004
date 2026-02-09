@@ -1,13 +1,13 @@
 use crate::constants::*;
 use common::structs::{AgentDetails, JobData, MetadataEntry, ServiceConfigInput};
 use identity_registry::storage::StorageModule;
+use multiversx_sc::proxy_imports::MultiValue2;
 use multiversx_sc::proxy_imports::OptionalValue;
 use multiversx_sc::types::{
     BigUint, EgldOrEsdtTokenPayment, EsdtTokenIdentifier, ManagedAddress, ManagedArgBuffer,
     ManagedBuffer, MultiValueEncoded, ReturnsNewManagedAddress, ReturnsResult, TestEsdtTransfer,
     TokenId,
 };
-use multiversx_sc::proxy_imports::MultiValue2;
 use multiversx_sc_scenario::{
     ScenarioTxRun, ScenarioTxWhitebox, ScenarioWorld, api::StaticApi, imports::ExpectMessage,
 };
@@ -154,7 +154,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("registerAgent")
+            .raw_call("register_agent")
             .arguments_raw(args)
             .run();
     }
@@ -172,7 +172,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("registerAgent")
+            .raw_call("register_agent")
             .arguments_raw(args)
             .returns(ExpectMessage(err_msg))
             .run();
@@ -197,7 +197,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("setMetadata")
+            .raw_call("set_metadata")
             .arguments_raw(args)
             .run();
     }
@@ -242,7 +242,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("setServiceConfigs")
+            .raw_call("set_service_configs")
             .arguments_raw(args)
             .run();
     }
@@ -699,7 +699,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("updateAgent")
+            .raw_call("update_agent")
             .arguments_raw(args)
             .esdt(TestEsdtTransfer(AGENT_TOKEN, nft_nonce, 1))
             .run();
@@ -723,7 +723,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("updateAgent")
+            .raw_call("update_agent")
             .arguments_raw(args)
             .esdt(TestEsdtTransfer(AGENT_TOKEN, nft_nonce, 1))
             .returns(ExpectMessage(err_msg))
@@ -883,7 +883,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("setMetadata")
+            .raw_call("set_metadata")
             .arguments_raw(args)
             .returns(ExpectMessage(err_msg))
             .run();
@@ -911,7 +911,7 @@ impl AgentTestState {
             .tx()
             .from(*from)
             .to(IDENTITY_SC_ADDRESS)
-            .raw_call("setServiceConfigs")
+            .raw_call("set_service_configs")
             .arguments_raw(args)
             .returns(ExpectMessage(err_msg))
             .run();
@@ -1063,10 +1063,8 @@ impl AgentTestState {
     pub fn query_agent_metadata_bulk(
         &mut self,
         nonce: u64,
-    ) -> MultiValueEncoded<
-        StaticApi,
-        MultiValue2<ManagedBuffer<StaticApi>, ManagedBuffer<StaticApi>>,
-    > {
+    ) -> MultiValueEncoded<StaticApi, MultiValue2<ManagedBuffer<StaticApi>, ManagedBuffer<StaticApi>>>
+    {
         self.world
             .query()
             .to(IDENTITY_SC_ADDRESS)
@@ -1079,10 +1077,8 @@ impl AgentTestState {
     pub fn query_agent_service_bulk(
         &mut self,
         nonce: u64,
-    ) -> MultiValueEncoded<
-        StaticApi,
-        MultiValue2<u32, multiversx_sc::types::Payment<StaticApi>>,
-    > {
+    ) -> MultiValueEncoded<StaticApi, MultiValue2<u32, multiversx_sc::types::Payment<StaticApi>>>
+    {
         self.world
             .query()
             .to(IDENTITY_SC_ADDRESS)

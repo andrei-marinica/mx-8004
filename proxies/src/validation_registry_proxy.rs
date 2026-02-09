@@ -96,7 +96,7 @@ where
         service_id: Arg2,
     ) -> TxTypedCall<Env, From, To, (), Gas, ()> {
         self.wrapped_tx
-            .raw_call("initJob")
+            .raw_call("init_job")
             .argument(&job_id)
             .argument(&agent_nonce)
             .argument(&service_id)
@@ -113,7 +113,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("submitProof")
+            .raw_call("submit_proof")
             .argument(&job_id)
             .argument(&proof)
             .original_result()
@@ -127,7 +127,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("verifyJob")
+            .raw_call("verify_job")
             .argument(&job_id)
             .original_result()
     }
@@ -140,7 +140,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("cleanOldJobs")
+            .raw_call("clean_old_jobs")
             .argument(&job_ids)
             .original_result()
     }
@@ -153,7 +153,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, bool> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("isJobVerified")
+            .raw_call("is_job_verified")
             .argument(&job_id)
             .original_result()
     }
@@ -166,7 +166,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, OptionalValue<common::structs::JobData<Env::Api>>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getJobData")
+            .raw_call("get_job_data")
             .argument(&job_id)
             .original_result()
     }
@@ -179,7 +179,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("setIdentityRegistryAddress")
+            .raw_call("set_identity_registry_address")
             .argument(&address)
             .original_result()
     }

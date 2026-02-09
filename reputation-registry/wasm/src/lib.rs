@@ -20,18 +20,18 @@ multiversx_sc_wasm_adapter::endpoints! {
     (
         init => init
         upgrade => upgrade
-        submitFeedback => submit_feedback
-        authorizeFeedback => authorize_feedback
-        appendResponse => append_response
-        getReputationScore => reputation_score
-        getTotalJobs => total_jobs
-        getValidationContractAddress => validation_contract_address
-        getIdentityContractAddress => identity_contract_address
-        hasGivenFeedback => has_given_feedback
-        isFeedbackAuthorized => is_feedback_authorized
-        getAgentResponse => agent_response
-        setIdentityContractAddress => set_identity_contract_address
-        setValidationContractAddress => set_validation_contract_address
+        submit_feedback => submit_feedback
+        authorize_feedback => authorize_feedback
+        append_response => append_response
+        get_reputation_score => reputation_score
+        get_total_jobs => total_jobs
+        get_validation_contract_address => validation_contract_address
+        get_identity_contract_address => identity_contract_address
+        has_given_feedback => has_given_feedback
+        is_feedback_authorized => is_feedback_authorized
+        get_agent_response => agent_response
+        set_identity_contract_address => set_identity_contract_address
+        set_validation_contract_address => set_validation_contract_address
     )
 }
 

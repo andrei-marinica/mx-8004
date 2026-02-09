@@ -35,7 +35,7 @@ pub trait ReputationRegistry:
     #[upgrade]
     fn upgrade(&self) {}
 
-    #[endpoint(submitFeedback)]
+    #[endpoint(submit_feedback)]
     fn submit_feedback(&self, job_id: ManagedBuffer, agent_nonce: u64, rating: BigUint) {
         let caller = self.blockchain().get_caller();
         let validation_addr = self.validation_contract_address().get();
@@ -70,7 +70,7 @@ pub trait ReputationRegistry:
         self.reputation_updated_event(agent_nonce, new_score);
     }
 
-    #[endpoint(authorizeFeedback)]
+    #[endpoint(authorize_feedback)]
     fn authorize_feedback(&self, job_id: ManagedBuffer, client: ManagedAddress) {
         let validation_addr = self.validation_contract_address().get();
         let job_mapper = self.external_job_data(validation_addr, &job_id);
@@ -84,7 +84,7 @@ pub trait ReputationRegistry:
         self.is_feedback_authorized(job_id, client).set(true);
     }
 
-    #[endpoint(appendResponse)]
+    #[endpoint(append_response)]
     fn append_response(&self, job_id: ManagedBuffer, response_uri: ManagedBuffer) {
         let validation_addr = self.validation_contract_address().get();
         let job_mapper = self.external_job_data(validation_addr, &job_id);

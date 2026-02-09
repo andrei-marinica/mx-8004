@@ -90,7 +90,7 @@ where
         token_ticker: Arg1,
     ) -> TxTypedCall<Env, From, To, (), Gas, ()> {
         self.wrapped_tx
-            .raw_call("issueToken")
+            .raw_call("issue_token")
             .argument(&token_display_name)
             .argument(&token_ticker)
             .original_result()
@@ -113,7 +113,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("registerAgent")
+            .raw_call("register_agent")
             .argument(&name)
             .argument(&uri)
             .argument(&public_key)
@@ -138,7 +138,7 @@ where
         services: Arg4,
     ) -> TxTypedCall<Env, From, To, (), Gas, ()> {
         self.wrapped_tx
-            .raw_call("updateAgent")
+            .raw_call("update_agent")
             .argument(&new_name)
             .argument(&new_uri)
             .argument(&new_public_key)
@@ -158,7 +158,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("setMetadata")
+            .raw_call("set_metadata")
             .argument(&nonce)
             .argument(&entries)
             .original_result()
@@ -175,7 +175,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("setServiceConfigs")
+            .raw_call("set_service_configs")
             .argument(&nonce)
             .argument(&configs)
             .original_result()
@@ -192,7 +192,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("removeMetadata")
+            .raw_call("remove_metadata")
             .argument(&nonce)
             .argument(&keys)
             .original_result()
@@ -209,7 +209,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("removeServiceConfigs")
+            .raw_call("remove_service_configs")
             .argument(&nonce)
             .argument(&service_ids)
             .original_result()
@@ -220,7 +220,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, EsdtTokenIdentifier<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentTokenId")
+            .raw_call("get_agent_token_id")
             .original_result()
     }
 
@@ -229,7 +229,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, MultiValueEncoded<Env::Api, MultiValue2<u64, ManagedAddress<Env::Api>>>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentId")
+            .raw_call("get_agent_id")
             .original_result()
     }
 
@@ -241,7 +241,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, common::structs::AgentDetails<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentDetails")
+            .raw_call("get_agent_details")
             .argument(&nonce)
             .original_result()
     }
@@ -254,7 +254,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, MultiValueEncoded<Env::Api, MultiValue2<ManagedBuffer<Env::Api>, ManagedBuffer<Env::Api>>>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentMetadata")
+            .raw_call("get_agent_metadata")
             .argument(&nonce)
             .original_result()
     }
@@ -267,7 +267,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, MultiValueEncoded<Env::Api, MultiValue2<u32, Payment<Env::Api>>>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentService")
+            .raw_call("get_agent_service")
             .argument(&nonce)
             .original_result()
     }
@@ -280,7 +280,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, common::structs::AgentDetails<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgent")
+            .raw_call("get_agent")
             .argument(&nonce)
             .original_result()
     }
@@ -293,7 +293,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ManagedAddress<Env::Api>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentOwner")
+            .raw_call("get_agent_owner")
             .argument(&nonce)
             .original_result()
     }
@@ -308,7 +308,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, OptionalValue<ManagedBuffer<Env::Api>>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getMetadata")
+            .raw_call("get_metadata")
             .argument(&nonce)
             .argument(&key)
             .original_result()
@@ -324,7 +324,7 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, OptionalValue<EgldOrEsdtTokenPayment<Env::Api>>> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("getAgentServiceConfig")
+            .raw_call("get_agent_service_config")
             .argument(&nonce)
             .argument(&service_id)
             .original_result()

@@ -20,22 +20,22 @@ multiversx_sc_wasm_adapter::endpoints! {
     (
         init => init
         upgrade => upgrade
-        issueToken => issue_token
-        registerAgent => register_agent
-        updateAgent => update_agent
-        setMetadata => set_metadata
-        setServiceConfigs => set_service_configs_endpoint
-        removeMetadata => remove_metadata
-        removeServiceConfigs => remove_service_configs
-        getAgentTokenId => agent_token_id
-        getAgentId => agents
-        getAgentDetails => agent_details
-        getAgentMetadata => agent_metadata
-        getAgentService => agent_service_config
-        getAgent => get_agent
-        getAgentOwner => get_agent_owner
-        getMetadata => get_metadata
-        getAgentServiceConfig => get_agent_service_config
+        issue_token => issue_token
+        register_agent => register_agent
+        update_agent => update_agent
+        set_metadata => set_metadata
+        set_service_configs => set_service_configs_endpoint
+        remove_metadata => remove_metadata
+        remove_service_configs => remove_service_configs
+        get_agent_token_id => agent_token_id
+        get_agent_id => agents
+        get_agent_details => agent_details
+        get_agent_metadata => agent_metadata
+        get_agent_service => agent_service_config
+        get_agent => get_agent
+        get_agent_owner => get_agent_owner
+        get_metadata => get_metadata
+        get_agent_service_config => get_agent_service_config
     )
 }
 

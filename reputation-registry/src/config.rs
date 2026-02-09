@@ -5,13 +5,13 @@ pub trait ConfigModule:
     common::cross_contract::CrossContractModule + crate::storage::StorageModule
 {
     #[only_owner]
-    #[endpoint(setIdentityContractAddress)]
+    #[endpoint(set_identity_contract_address)]
     fn set_identity_contract_address(&self, address: ManagedAddress) {
         self.identity_contract_address().set(&address);
     }
 
     #[only_owner]
-    #[endpoint(setValidationContractAddress)]
+    #[endpoint(set_validation_contract_address)]
     fn set_validation_contract_address(&self, address: ManagedAddress) {
         self.validation_contract_address().set(&address);
     }
