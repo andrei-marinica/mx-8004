@@ -37,15 +37,26 @@ sequenceDiagram
     Note over REP: Verified & Score Updated
 ```
 
-## Prerequisites
-
-- [Rust](https://www.rust-lang.org/tools/install)
-- [multiversx-sc-meta](https://docs.multiversx.com/developers/meta/sc-meta) (`sc-meta` CLI)
-- [Docker](https://www.docker.com/) — required for chain simulator tests
-
 ## Quick Start
 
-All commands are available via `make`:
+```bash
+git clone https://github.com/sasurobert/mx-8004.git
+cd mx-8004
+chmod +x setup.sh && ./setup.sh
+```
+
+The setup script installs the WASM target, `sc-meta` (if missing), builds all contracts, and runs tests.
+
+### Prerequisites
+
+| Tool | Version | Required |
+|------|---------|----------|
+| Rust | 1.78+ | Yes |
+| `wasm32-unknown-unknown` | — | Auto-installed by setup.sh |
+| `multiversx-sc-meta` | latest | Auto-installed by setup.sh |
+| Docker | — | For chain simulator tests |
+
+### Make Commands
 
 ```bash
 make build              # Build all contracts (sc-meta all build)
