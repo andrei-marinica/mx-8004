@@ -4,3 +4,4 @@ output/
 **/*.abi.json
 Cargo.lock
 .DS_Store
+coverage-html/

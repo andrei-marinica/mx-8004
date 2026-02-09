@@ -3,48 +3,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MultiversX](https://img.shields.io/badge/Blockchain-MultiversX-blue.svg)](https://multiversx.com)
 
-**MX-8004** is a protocol standard for building and interacting with **Trustless Agents** on the MultiversX blockchain. It provides a robust, decentralized framework for Agent Identity, Task Validation, and Reputation without relying on centralized intermediaries.
+A protocol standard for **Trustless Agents** on MultiversX. Three smart contracts provide soulbound NFT identities, on-chain job validation with oracle verification, and anti-gaming reputation scoring — all connected via cross-contract storage reads (no async calls).
 
----
+## Architecture
 
-## 🌟 Feature Highlights (v2.0)
+| Registry | Role |
+|---|---|
+| **Identity Registry** | Issues soulbound NFTs as agent identities. Stores metadata (name, URI, public key) in NFT attributes and mirrors service configs in contract storage for cross-contract reads. |
+| **Validation Registry** | Records jobs, accepts proof submissions, and verifies completion via an oracle. Serves as the source of truth for employer-agent-job relationships. |
+| **Reputation Registry** | Collects feedback gated by authorization and verified job completion. Cross-references both Identity and Validation registries to prevent Sybil attacks and frontrunning. |
 
-### Identity Registry
-- **Soulbound Identity NFTs**: Agents are issued non-transferable NFTs (`ESDTRoleNFTCreate`), ensuring identity permanence.
-- **Dynamic Attributes**: Agent metadata (Name, URI, Public Key) is stored directly in NFT attributes and synchronized with contract storage.
-- **High-Performance Storage Sync**: Service prices are mirrored in contract storage for direct inter-contract reading.
-- **Transfer-Execute Metadata Updates**: Securely update agent attributes by sending the NFT to the contract; the nonce is discovered automatically from the payment.
-- **Async Issuance**: Supports asynchronous callbacks for token issuance, robust against gas failures.
-
-### Security Enhancements
-- **Strict Access Control**: `verify_job` is now protected by `#[only_owner]` (Oracle).
-- **Cross-Contract Verification**: `ReputationRegistry` now verifies `append_response` calls by cross-referencing `ValidationRegistry` (for job existence) and `IdentityRegistry` (for agent ownership).
-- **Safe Arithmetic**: All financial and scoring calculations use `BigUint` and strict `TimestampSeconds` types to prevent overflows and type confusion.
-
-## 🏛 Architecture
-
-The MX-8004 standard is composed of three primary registries:
-
-### 1. Identity Registry (NFT-based)
-Empowers agents with a verifiable, on-chain identity linked to a unique NFT.
-- **Sovereign Metadata**: Linked to decentralized storage (IPFS).
-- **Public Key Anchoring**: Each agent identity is tied to an Ed25519 public key for off-chain message signing.
-
-### 2. Validation Registry (Authenticity Layer)
-Ensures that work claimed by an agent was actually performed and verified.
-- **Job Initialization**: Employers record tasks on-chain before work begins.
-- **Storage Cleanup**: Optimized cleanup mechanisms to minimize blockchain footprint.
-- **Oracle Verification**: Supports external oracles to confirm task success.
-
-### 3. Reputation Registry (Anti-Gaming Layer)
-A high-fidelity scoring system protected against Sybil attacks and frontrunning.
-- **Authorization Gates**: Agents must authorize specific clients to leave feedback.
-- **Frontrunning Protection**: Only the verifiable employer of a job can submit a rating.
-- **Agent Responses**: Agents can provide counter-evidence for specific feedback on-chain.
-
----
-
-## 🔄 Protocol Flow
+## Protocol Flow
 
 ```mermaid
 sequenceDiagram
@@ -55,53 +24,72 @@ sequenceDiagram
 
     User->>VAL: init_job(job_id, agent_id)
     Note over VAL: Records Employer & Time
-    
+
     Agent->>VAL: submit_proof(job_id, proof_hash)
     Note over VAL: Pending Verification
-    
+
     VAL->>VAL: verify_job(job_id) [By Oracle]
-    
+
     Agent->>REP: authorize_feedback(job_id, user_addr)
     Note over REP: Authorization Gate Opens
-    
+
     User->>REP: submit_feedback(job_id, rating)
     Note over REP: Verified & Score Updated
 ```
 
----
+## Prerequisites
 
-## 🚀 Getting Started
-
-### Prerequisites
 - [Rust](https://www.rust-lang.org/tools/install)
-- [multiversx-sc-meta](https://github.com/multiversx/mx-sdk-rs)
-- [mxpy](https://docs.multiversx.com/sdk-and-tools/mxpy/installing-mxpy)
+- [multiversx-sc-meta](https://docs.multiversx.com/developers/meta/sc-meta) (`sc-meta` CLI)
+- [Docker](https://www.docker.com/) — required for chain simulator tests
 
-### Building the Contracts
+## Quick Start
+
+All commands are available via `make`:
+
 ```bash
-# Build the entire workspace
-mxpy contract build identity-registry
-mxpy contract build validation-registry
-mxpy contract build reputation-registry
+make build              # Build all contracts (sc-meta all build)
+make test               # Run unit & scenario tests
+make coverage           # Generate LCOV coverage report
+make coverage-html      # Generate HTML coverage report
+make coverage-summary   # Print coverage summary to terminal
 ```
 
-### Running Tests
-The project includes both RustVM unit tests and declarative Scenario tests.
+### Chain Simulator
+
+Requires Docker. Spins up a local MultiversX chain for integration testing.
+
 ```bash
-# Run all tests
-cargo test --workspace
+make cs-install         # Install the chain simulator
+make cs-start           # Start the simulator (background)
+make cs-test            # Run chain simulator tests
+make cs-stop            # Stop the simulator
 ```
 
----
+### CI Pipelines
 
-## 🛡 Security & Anti-Gaming
+```bash
+make ci                 # build + test + coverage
+make ci-full            # build + test + coverage + chain simulator tests
+```
 
-MX-8004 implements several best-of-breed security patterns:
-- **Checks-Effects-Interactions**: Followed throughout to prevent reentrancy.
-- **Linked Verification**: Feedback scores are invalid unless backed by a `Verified` job in the `ValidationRegistry`.
-- **Client Filtering**: High-reputation agents can filter out feedback from non-trusted or non-linked clients.
+## Project Structure
 
----
+```
+mx-8004/
+  common/                  # Shared types and structs
+  identity-registry/       # Identity NFT contract
+  validation-registry/     # Job validation contract
+  reputation-registry/     # Reputation scoring contract
+  proxies/                 # Auto-generated contract proxies
+  tests/                   # Integration & chain simulator tests
+  docs/                    # Specification and plans
+```
 
-## ⚖️ License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## Specification
+
+See [docs/specification.md](docs/specification.md) for the full protocol specification.
+
+## License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
