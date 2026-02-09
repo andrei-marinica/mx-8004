@@ -51,7 +51,9 @@ pub trait ValidationRegistry:
         // If service_id provided, validate payment and forward to agent owner
         if let OptionalValue::Some(sid) = service_id {
             let identity_addr = self.identity_registry_address().get();
-            let agent_owner = self.external_agents(identity_addr.clone()).get_value(&agent_nonce);
+            let agent_owner = self
+                .external_agents(identity_addr.clone())
+                .get_value(&agent_nonce);
 
             let service_config_map = self.external_agent_service_config(identity_addr, agent_nonce);
 

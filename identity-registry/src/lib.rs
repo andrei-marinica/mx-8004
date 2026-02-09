@@ -118,7 +118,6 @@ pub trait IdentityRegistry:
         new_name: ManagedBuffer,
         new_uri: ManagedBuffer,
         new_public_key: ManagedBuffer,
-        signature: ManagedBuffer,
         metadata: OptionalValue<MultiValueEncodedCounted<MetadataEntry<Self::Api>>>,
         services: OptionalValue<MultiValueEncodedCounted<ServiceConfigInput<Self::Api>>>,
     ) {
@@ -132,10 +131,6 @@ pub trait IdentityRegistry:
         let caller = self.blockchain().get_caller();
         let owner = self.agents().get_value(&nonce);
         require!(caller == owner, ERR_NOT_OWNER);
-
-        let hashed = self.crypto().sha256(new_public_key.clone());
-        self.crypto()
-            .verify_ed25519(&new_public_key, hashed.as_managed_buffer(), &signature);
 
         self.send().esdt_metadata_recreate(
             token_id.clone(),
@@ -191,11 +186,7 @@ pub trait IdentityRegistry:
 
     /// Remove metadata entries by key.
     #[endpoint(removeMetadata)]
-    fn remove_metadata(
-        &self,
-        nonce: u64,
-        keys: MultiValueEncoded<ManagedBuffer>,
-    ) {
+    fn remove_metadata(&self, nonce: u64, keys: MultiValueEncoded<ManagedBuffer>) {
         require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
         self.require_agent_owner(nonce);
         let mut mapper = self.agent_metadata(nonce);
@@ -207,11 +198,7 @@ pub trait IdentityRegistry:
 
     /// Remove service configurations by service ID.
     #[endpoint(removeServiceConfigs)]
-    fn remove_service_configs(
-        &self,
-        nonce: u64,
-        service_ids: MultiValueEncoded<u32>,
-    ) {
+    fn remove_service_configs(&self, nonce: u64, service_ids: MultiValueEncoded<u32>) {
         require!(!self.agent_token_id().is_empty(), ERR_TOKEN_NOT_ISSUED);
         self.require_agent_owner(nonce);
         let mut mapper = self.agent_service_config(nonce);

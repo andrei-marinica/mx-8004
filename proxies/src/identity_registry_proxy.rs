@@ -127,24 +127,21 @@ where
         Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
         Arg1: ProxyArg<ManagedBuffer<Env::Api>>,
         Arg2: ProxyArg<ManagedBuffer<Env::Api>>,
-        Arg3: ProxyArg<ManagedBuffer<Env::Api>>,
-        Arg4: ProxyArg<OptionalValue<MultiValueEncoded<Env::Api, common::structs::MetadataEntry<Env::Api>>>>,
-        Arg5: ProxyArg<OptionalValue<MultiValueEncoded<Env::Api, common::structs::ServiceConfigInput<Env::Api>>>>,
+        Arg3: ProxyArg<OptionalValue<MultiValueEncoded<Env::Api, common::structs::MetadataEntry<Env::Api>>>>,
+        Arg4: ProxyArg<OptionalValue<MultiValueEncoded<Env::Api, common::structs::ServiceConfigInput<Env::Api>>>>,
     >(
         self,
         new_name: Arg0,
         new_uri: Arg1,
         new_public_key: Arg2,
-        signature: Arg3,
-        metadata: Arg4,
-        services: Arg5,
+        metadata: Arg3,
+        services: Arg4,
     ) -> TxTypedCall<Env, From, To, (), Gas, ()> {
         self.wrapped_tx
             .raw_call("updateAgent")
             .argument(&new_name)
             .argument(&new_uri)
             .argument(&new_public_key)
-            .argument(&signature)
             .argument(&metadata)
             .argument(&services)
             .original_result()
@@ -181,6 +178,40 @@ where
             .raw_call("setServiceConfigs")
             .argument(&nonce)
             .argument(&configs)
+            .original_result()
+    }
+
+    /// Remove metadata entries by key. 
+    pub fn remove_metadata<
+        Arg0: ProxyArg<u64>,
+        Arg1: ProxyArg<MultiValueEncoded<Env::Api, ManagedBuffer<Env::Api>>>,
+    >(
+        self,
+        nonce: Arg0,
+        keys: Arg1,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("removeMetadata")
+            .argument(&nonce)
+            .argument(&keys)
+            .original_result()
+    }
+
+    /// Remove service configurations by service ID. 
+    pub fn remove_service_configs<
+        Arg0: ProxyArg<u64>,
+        Arg1: ProxyArg<MultiValueEncoded<Env::Api, u32>>,
+    >(
+        self,
+        nonce: Arg0,
+        service_ids: Arg1,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("removeServiceConfigs")
+            .argument(&nonce)
+            .argument(&service_ids)
             .original_result()
     }
 

@@ -28,20 +28,10 @@ pub trait UtilsModule: crate::storage::StorageModule {
         configs: MultiValueEncodedCounted<ServiceConfigInput<Self::Api>>,
     ) {
         for config in configs {
-            if config.price > 0 {
-                let amount = NonZeroBigUint::new_or_panic(config.price);
-                let payment = Payment::new(config.token, config.nonce, amount);
-                self.agent_service_config(nonce)
-                    .insert(config.service_id, payment);
-            } else {
-                self.agent_service_config(nonce).remove(&config.service_id);
-            }
+            let amount = NonZeroBigUint::new_or_panic(config.price);
+            let payment = Payment::new(config.token, config.nonce, amount);
+            self.agent_service_config(nonce)
+                .insert(config.service_id, payment);
         }
-    }
-
-    fn create_uris_vec(&self, uri: ManagedBuffer) -> ManagedVec<ManagedBuffer> {
-        let mut uris = ManagedVec::new();
-        uris.push(uri);
-        uris
     }
 }
