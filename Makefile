@@ -1,4 +1,4 @@
-.PHONY: build test coverage coverage-html cs-install cs-start cs-stop cs-test clean
+.PHONY: build test coverage coverage-html cs-install cs-start cs-stop cs-test clean proxy-check proxy-gen
 
 # ── Build ──
 
@@ -60,6 +60,14 @@ cs-test-verbose:
 
 cs-test-ignored:
 	cargo test -p mx-8004-tests --features chain-simulator-tests -- --test-threads=1 --ignored
+
+# ── Proxy Management ──
+
+proxy-gen:
+	sc-meta all proxy
+
+proxy-check:
+	sc-meta all proxy --compare
 
 # ── Full CI Pipeline ──
 
