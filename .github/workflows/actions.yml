@@ -23,6 +23,7 @@ jobs:
     uses: multiversx/mx-sc-actions/.github/workflows/contracts.yml@v6.0.0
     with:
       rust-toolchain: 1.86
+      enable-proxy-compare: false
       coverage-args: --ignore-filename-regex='/(tests|interactor|meta|wasm|output|proxies|common)/|/\.cargo/|/\.rustup/|proxy\.rs$|storage\.rs$|structs\.rs$|events\.rs$|errors\.rs$' --output ./coverage.md
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}
