@@ -96,6 +96,7 @@ impl AgentTestState {
             .esdt_balance(PAYMENT_TOKEN, 1_000_000_000u64)
             .esdt_balance(WRONG_TOKEN, 1_000_000_000u64);
         world.account(WORKER).nonce(1).balance(1_000_000u64);
+        world.account(VALIDATOR).nonce(1).balance(1_000_000u64);
 
         Self {
             world,
@@ -361,20 +362,35 @@ impl AgentTestState {
             .run();
     }
 
-    pub fn verify_job(&mut self, job_id: &[u8]) {
-        self.world
-            .tx()
-            .from(OWNER_ADDRESS)
-            .to(VALIDATION_SC_ADDRESS)
-            .typed(ValidationRegistryProxy)
-            .verify_job(ManagedBuffer::from(job_id))
-            .run();
-    }
-
-    pub fn verify_job_expect_err(
+    pub fn validation_request(
         &mut self,
         from: &multiversx_sc::types::TestAddress,
         job_id: &[u8],
+        validator: &multiversx_sc::types::TestAddress,
+        request_uri: &[u8],
+        request_hash: &[u8],
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .validation_request(
+                ManagedBuffer::from(job_id),
+                validator.to_managed_address(),
+                ManagedBuffer::from(request_uri),
+                ManagedBuffer::from(request_hash),
+            )
+            .run();
+    }
+
+    pub fn validation_request_expect_err(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        validator: &multiversx_sc::types::TestAddress,
+        request_uri: &[u8],
+        request_hash: &[u8],
         err_msg: &str,
     ) {
         self.world
@@ -382,7 +398,62 @@ impl AgentTestState {
             .from(*from)
             .to(VALIDATION_SC_ADDRESS)
             .typed(ValidationRegistryProxy)
-            .verify_job(ManagedBuffer::from(job_id))
+            .validation_request(
+                ManagedBuffer::from(job_id),
+                validator.to_managed_address(),
+                ManagedBuffer::from(request_uri),
+                ManagedBuffer::from(request_hash),
+            )
+            .returns(ExpectMessage(err_msg))
+            .run();
+    }
+
+    pub fn validation_response(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        request_hash: &[u8],
+        response: u8,
+        response_uri: &[u8],
+        response_hash: &[u8],
+        tag: &[u8],
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .validation_response(
+                ManagedBuffer::from(request_hash),
+                response,
+                ManagedBuffer::from(response_uri),
+                ManagedBuffer::from(response_hash),
+                ManagedBuffer::from(tag),
+            )
+            .run();
+    }
+
+    pub fn validation_response_expect_err(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        request_hash: &[u8],
+        response: u8,
+        response_uri: &[u8],
+        response_hash: &[u8],
+        tag: &[u8],
+        err_msg: &str,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .validation_response(
+                ManagedBuffer::from(request_hash),
+                response,
+                ManagedBuffer::from(response_uri),
+                ManagedBuffer::from(response_hash),
+                ManagedBuffer::from(tag),
+            )
             .returns(ExpectMessage(err_msg))
             .run();
     }
@@ -403,20 +474,7 @@ impl AgentTestState {
 
     // ── Reputation Registry ──
 
-    pub fn authorize_feedback(
-        &mut self,
-        from: &multiversx_sc::types::TestAddress,
-        job_id: &[u8],
-        client: &multiversx_sc::types::TestAddress,
-    ) {
-        self.world
-            .tx()
-            .from(*from)
-            .to(REPUTATION_SC_ADDRESS)
-            .typed(ReputationRegistryProxy)
-            .authorize_feedback(ManagedBuffer::from(job_id), client.to_managed_address())
-            .run();
-    }
+    // authorize_feedback removed — ERC-8004 compliance
 
     pub fn submit_feedback(
         &mut self,
@@ -578,19 +636,7 @@ impl AgentTestState {
             .run()
     }
 
-    pub fn query_is_feedback_authorized(
-        &mut self,
-        job_id: &[u8],
-        client: &multiversx_sc::types::TestAddress,
-    ) -> bool {
-        self.world
-            .query()
-            .to(REPUTATION_SC_ADDRESS)
-            .typed(ReputationRegistryProxy)
-            .is_feedback_authorized(ManagedBuffer::from(job_id), client.to_managed_address())
-            .returns(ReturnsResult)
-            .run()
-    }
+    // query_is_feedback_authorized removed — ERC-8004 compliance
 
     pub fn query_agent_response(&mut self, job_id: &[u8]) -> ManagedBuffer<StaticApi> {
         self.world
@@ -959,22 +1005,7 @@ impl AgentTestState {
             .run();
     }
 
-    pub fn authorize_feedback_expect_err(
-        &mut self,
-        from: &multiversx_sc::types::TestAddress,
-        job_id: &[u8],
-        client: &multiversx_sc::types::TestAddress,
-        err_msg: &str,
-    ) {
-        self.world
-            .tx()
-            .from(*from)
-            .to(REPUTATION_SC_ADDRESS)
-            .typed(ReputationRegistryProxy)
-            .authorize_feedback(ManagedBuffer::from(job_id), client.to_managed_address())
-            .returns(ExpectMessage(err_msg))
-            .run();
-    }
+    // authorize_feedback_expect_err removed — ERC-8004 compliance
 
     pub fn append_response_expect_err(
         &mut self,

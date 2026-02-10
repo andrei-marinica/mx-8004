@@ -10,7 +10,6 @@ pub mod storage;
 mod utils;
 
 use errors::*;
-use storage::JobStatus;
 
 #[multiversx_sc::contract]
 pub trait ReputationRegistry:
@@ -35,6 +34,8 @@ pub trait ReputationRegistry:
     #[upgrade]
     fn upgrade(&self) {}
 
+    /// Submit feedback for a job. Caller must be the employer who created the job.
+    /// Job must have a validation response recorded (no pre-authorization needed).
     #[endpoint(submit_feedback)]
     fn submit_feedback(&self, job_id: ManagedBuffer, agent_nonce: u64, rating: BigUint) {
         let caller = self.blockchain().get_caller();
@@ -45,18 +46,10 @@ pub trait ReputationRegistry:
         require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
         let job_data = job_mapper.get();
 
-        require!(job_data.status == JobStatus::Verified, ERR_JOB_NOT_VERIFIED);
-
         // 2. Frontrunning Protection: Verify caller is the employer
         require!(caller == job_data.employer, ERR_NOT_EMPLOYER);
 
-        // 3. Authorization Gate: Verify agent authorized this specific feedback
-        require!(
-            self.is_feedback_authorized(job_id.clone(), caller).get(),
-            ERR_FEEDBACK_NOT_AUTHORIZED
-        );
-
-        // 4. Duplicate Prevention
+        // 3. Duplicate Prevention
         require!(
             !self.has_given_feedback(job_id.clone()).get(),
             ERR_FEEDBACK_ALREADY_PROVIDED
@@ -70,31 +63,15 @@ pub trait ReputationRegistry:
         self.reputation_updated_event(agent_nonce, new_score);
     }
 
-    #[endpoint(authorize_feedback)]
-    fn authorize_feedback(&self, job_id: ManagedBuffer, client: ManagedAddress) {
-        let validation_addr = self.validation_contract_address().get();
-        let job_mapper = self.external_job_data(validation_addr, &job_id);
-        require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
-        let job_data = job_mapper.get();
-
-        let caller = self.blockchain().get_caller();
-        let agent_owner = self.require_agent_owner(job_data.agent_nonce);
-        require!(caller == agent_owner, ERR_NOT_AGENT_OWNER);
-
-        self.is_feedback_authorized(job_id, client).set(true);
-    }
-
+    /// ERC-8004: Anyone can append a response to feedback (e.g., agent showing refund,
+    /// data aggregator tagging feedback as spam).
     #[endpoint(append_response)]
     fn append_response(&self, job_id: ManagedBuffer, response_uri: ManagedBuffer) {
         let validation_addr = self.validation_contract_address().get();
         let job_mapper = self.external_job_data(validation_addr, &job_id);
         require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
-        let job_data = job_mapper.get();
 
-        let caller = self.blockchain().get_caller();
-        let agent_owner = self.require_agent_owner(job_data.agent_nonce);
-        require!(caller == agent_owner, ERR_NOT_AGENT_OWNER);
-
+        // Per ERC-8004: anyone can append responses — no caller check
         self.agent_response(job_id).set(response_uri);
     }
 }

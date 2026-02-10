@@ -119,16 +119,72 @@ where
             .original_result()
     }
 
-    pub fn verify_job<
+    /// NFT-holder variant: proves ownership by sending the agent NFT. 
+    /// The contract verifies token ID + nonce, executes proof, and returns the NFT. 
+    pub fn submit_proof_with_nft<
         Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg1: ProxyArg<ManagedBuffer<Env::Api>>,
     >(
         self,
         job_id: Arg0,
+        proof: Arg1,
+    ) -> TxTypedCall<Env, From, To, (), Gas, ()> {
+        self.wrapped_tx
+            .raw_call("submit_proof_with_nft")
+            .argument(&job_id)
+            .argument(&proof)
+            .original_result()
+    }
+
+    /// ERC-8004: Agent requests validation from a specific validator. 
+    /// MUST be called by the owner of the agent (agentId). 
+    pub fn validation_request<
+        Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg1: ProxyArg<ManagedAddress<Env::Api>>,
+        Arg2: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg3: ProxyArg<ManagedBuffer<Env::Api>>,
+    >(
+        self,
+        job_id: Arg0,
+        validator_address: Arg1,
+        request_uri: Arg2,
+        request_hash: Arg3,
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("verify_job")
+            .raw_call("validation_request")
             .argument(&job_id)
+            .argument(&validator_address)
+            .argument(&request_uri)
+            .argument(&request_hash)
+            .original_result()
+    }
+
+    /// ERC-8004: Validator responds with a result (0-100). 
+    /// MUST be called by the validatorAddress from the original request. 
+    /// Can be called multiple times for progressive validation. 
+    pub fn validation_response<
+        Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg1: ProxyArg<u8>,
+        Arg2: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg3: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg4: ProxyArg<ManagedBuffer<Env::Api>>,
+    >(
+        self,
+        request_hash: Arg0,
+        response: Arg1,
+        _response_uri: Arg2,
+        response_hash: Arg3,
+        tag: Arg4,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("validation_response")
+            .argument(&request_hash)
+            .argument(&response)
+            .argument(&_response_uri)
+            .argument(&response_hash)
+            .argument(&tag)
             .original_result()
     }
 
@@ -168,6 +224,34 @@ where
             .payment(NotPayable)
             .raw_call("get_job_data")
             .argument(&job_id)
+            .original_result()
+    }
+
+    /// ERC-8004: Returns validation status for a request hash. 
+    pub fn get_validation_status<
+        Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
+    >(
+        self,
+        request_hash: Arg0,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, OptionalValue<common::structs::ValidationRequestData<Env::Api>>> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("get_validation_status")
+            .argument(&request_hash)
+            .original_result()
+    }
+
+    /// ERC-8004: Returns all validation request hashes for an agent. 
+    pub fn get_agent_validations<
+        Arg0: ProxyArg<u64>,
+    >(
+        self,
+        agent_nonce: Arg0,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ManagedVec<Env::Api, ManagedBuffer<Env::Api>>> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("get_agent_validations")
+            .argument(&agent_nonce)
             .original_result()
     }
 

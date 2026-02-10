@@ -1,7 +1,7 @@
 multiversx_sc::imports!();
 multiversx_sc::derive_imports!();
 
-use crate::structs::JobData;
+use crate::structs::{JobData, ValidationRequestData};
 
 #[multiversx_sc::module]
 pub trait ViewsModule:
@@ -21,5 +21,29 @@ pub trait ViewsModule:
         } else {
             OptionalValue::Some(job_mapper.get())
         }
+    }
+
+    /// ERC-8004: Returns validation status for a request hash.
+    #[view(get_validation_status)]
+    fn get_validation_status(
+        &self,
+        request_hash: ManagedBuffer,
+    ) -> OptionalValue<ValidationRequestData<Self::Api>> {
+        let mapper = self.validation_request_data(&request_hash);
+        if mapper.is_empty() {
+            OptionalValue::None
+        } else {
+            OptionalValue::Some(mapper.get())
+        }
+    }
+
+    /// ERC-8004: Returns all validation request hashes for an agent.
+    #[view(get_agent_validations)]
+    fn get_agent_validations(&self, agent_nonce: u64) -> ManagedVec<ManagedBuffer> {
+        let mut result = ManagedVec::new();
+        for hash in self.agent_validations(agent_nonce).iter() {
+            result.push(hash);
+        }
+        result
     }
 }

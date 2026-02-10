@@ -88,6 +88,8 @@ where
     To: TxTo<Env>,
     Gas: TxGas<Env>,
 {
+    /// Submit feedback for a job. Caller must be the employer who created the job. 
+    /// Job must have a validation response recorded (no pre-authorization needed). 
     pub fn submit_feedback<
         Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
         Arg1: ProxyArg<u64>,
@@ -107,22 +109,8 @@ where
             .original_result()
     }
 
-    pub fn authorize_feedback<
-        Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
-        Arg1: ProxyArg<ManagedAddress<Env::Api>>,
-    >(
-        self,
-        job_id: Arg0,
-        client: Arg1,
-    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
-        self.wrapped_tx
-            .payment(NotPayable)
-            .raw_call("authorize_feedback")
-            .argument(&job_id)
-            .argument(&client)
-            .original_result()
-    }
-
+    /// ERC-8004: Anyone can append a response to feedback (e.g., agent showing refund, 
+    /// data aggregator tagging feedback as spam). 
     pub fn append_response<
         Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
         Arg1: ProxyArg<ManagedBuffer<Env::Api>>,
@@ -193,22 +181,6 @@ where
             .payment(NotPayable)
             .raw_call("has_given_feedback")
             .argument(&job_id)
-            .original_result()
-    }
-
-    pub fn is_feedback_authorized<
-        Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
-        Arg1: ProxyArg<ManagedAddress<Env::Api>>,
-    >(
-        self,
-        job_id: Arg0,
-        client: Arg1,
-    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, bool> {
-        self.wrapped_tx
-            .payment(NotPayable)
-            .raw_call("is_feedback_authorized")
-            .argument(&job_id)
-            .argument(&client)
             .original_result()
     }
 

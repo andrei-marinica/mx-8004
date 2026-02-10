@@ -27,14 +27,6 @@ pub trait StorageModule: common::cross_contract::CrossContractModule {
     #[storage_mapper("hasGivenFeedback")]
     fn has_given_feedback(&self, job_id: ManagedBuffer) -> SingleValueMapper<bool>;
 
-    #[view(is_feedback_authorized)]
-    #[storage_mapper("isFeedbackAuthorized")]
-    fn is_feedback_authorized(
-        &self,
-        job_id: ManagedBuffer,
-        client: ManagedAddress,
-    ) -> SingleValueMapper<bool>;
-
     #[view(get_agent_response)]
     #[storage_mapper("agentResponse")]
     fn agent_response(&self, job_id: ManagedBuffer) -> SingleValueMapper<ManagedBuffer>;

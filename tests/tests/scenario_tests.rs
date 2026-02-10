@@ -322,6 +322,7 @@ fn test_submit_proof() {
     );
 
     state.init_job(&CLIENT, b"job_proof", 1, None);
+    // submit_proof is open — anyone (e.g. WORKER agent) can call it
     state.submit_proof(&WORKER, b"job_proof", b"proof_data_here");
 
     let job = state.query_job_data(b"job_proof");
@@ -335,11 +336,11 @@ fn test_submit_proof() {
 }
 
 // ============================================
-// 13. Verify Job
+// 13. Validation Request
 // ============================================
 
 #[test]
-fn test_verify_job() {
+fn test_validation_request() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &AGENT_OWNER,
@@ -350,23 +351,30 @@ fn test_verify_job() {
         vec![],
     );
 
-    state.init_job(&CLIENT, b"job_verify", 1, None);
-    state.submit_proof(&WORKER, b"job_verify", b"proof123");
-    state.verify_job(b"job_verify");
+    state.init_job(&CLIENT, b"job_vr", 1, None);
+    state.submit_proof(&WORKER, b"job_vr", b"proof123");
 
-    assert!(state.query_is_job_verified(b"job_verify"));
-    let job = state.query_job_data(b"job_verify");
+    // Agent owner requests validation
+    state.validation_request(
+        &AGENT_OWNER,
+        b"job_vr",
+        &VALIDATOR,
+        b"https://request.uri",
+        b"req_hash_001",
+    );
+
+    let job = state.query_job_data(b"job_vr");
     if let OptionalValue::Some(data) = job {
-        assert_eq!(data.status, JobStatus::Verified);
+        assert_eq!(data.status, JobStatus::ValidationRequested);
     }
 }
 
 // ============================================
-// 14. Verify Job Not Owner
+// 14. Validation Request — Not Agent Owner
 // ============================================
 
 #[test]
-fn test_verify_job_not_owner() {
+fn test_validation_request_not_owner() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &AGENT_OWNER,
@@ -380,11 +388,89 @@ fn test_verify_job_not_owner() {
     state.init_job(&CLIENT, b"job_notowner", 1, None);
     state.submit_proof(&WORKER, b"job_notowner", b"proof");
 
-    // Non-owner tries to verify
-    state.verify_job_expect_err(
+    // CLIENT (not agent owner) tries to request validation
+    state.validation_request_expect_err(
         &CLIENT,
         b"job_notowner",
-        "Endpoint can only be called by owner",
+        &VALIDATOR,
+        b"https://request.uri",
+        b"req_hash_err",
+        "Only the agent owner can perform this action",
+    );
+}
+
+// ============================================
+// 14b. Validation Response
+// ============================================
+
+#[test]
+fn test_validation_response() {
+    let mut state = AgentTestState::new();
+    state.register_agent(
+        &AGENT_OWNER,
+        b"TestAgent",
+        b"https://agent.example.com",
+        b"pubkey123",
+        vec![],
+        vec![],
+    );
+
+    state.init_job(&CLIENT, b"job_resp", 1, None);
+    state.submit_proof(&WORKER, b"job_resp", b"proof123");
+    state.validation_request(
+        &AGENT_OWNER,
+        b"job_resp",
+        &VALIDATOR,
+        b"https://request.uri",
+        b"req_hash_resp",
+    );
+
+    // Validator responds
+    state.validation_response(
+        &VALIDATOR,
+        b"req_hash_resp",
+        85,
+        b"https://response.uri",
+        b"resp_hash_001",
+        b"quality",
+    );
+}
+
+// ============================================
+// 14c. Validation Response — Not Validator
+// ============================================
+
+#[test]
+fn test_validation_response_not_validator() {
+    let mut state = AgentTestState::new();
+    state.register_agent(
+        &AGENT_OWNER,
+        b"TestAgent",
+        b"https://agent.example.com",
+        b"pubkey123",
+        vec![],
+        vec![],
+    );
+
+    state.init_job(&CLIENT, b"job_nv", 1, None);
+    state.submit_proof(&WORKER, b"job_nv", b"proof");
+    state.validation_request(
+        &AGENT_OWNER,
+        b"job_nv",
+        &VALIDATOR,
+        b"https://request.uri",
+        b"req_hash_nv",
+    );
+
+    // CLIENT (not the designated validator) tries to respond
+    state.validation_response_expect_err(
+        &CLIENT,
+        b"req_hash_nv",
+        80,
+        b"https://response.uri",
+        b"resp_hash",
+        b"tag",
+        "Only the designated validator can respond",
     );
 }
 
@@ -440,13 +526,8 @@ fn test_full_feedback_flow() {
 
     state.init_job(&CLIENT, b"job_fb", 1, None);
     state.submit_proof(&WORKER, b"job_fb", b"proof");
-    state.verify_job(b"job_fb");
 
-    // Agent owner authorizes CLIENT to give feedback
-    state.authorize_feedback(&AGENT_OWNER, b"job_fb", &CLIENT);
-    assert!(state.query_is_feedback_authorized(b"job_fb", &CLIENT));
-
-    // CLIENT submits feedback (rating: 80)
+    // ERC-8004: employer (CLIENT) submits feedback directly — no authorization needed
     state.submit_feedback(&CLIENT, b"job_fb", 1, 80);
 
     // Verify reputation updated
@@ -477,19 +558,17 @@ fn test_feedback_guards() {
 
     state.init_job(&CLIENT, b"job_guard", 1, None);
     state.submit_proof(&WORKER, b"job_guard", b"proof");
-    state.verify_job(b"job_guard");
 
-    // Feedback without authorization -> error
+    // Non-employer tries to submit feedback -> error
     state.submit_feedback_expect_err(
-        &CLIENT,
+        &WORKER,
         b"job_guard",
         1,
         80,
-        "Feedback not authorized by agent",
+        "Only the employer can provide feedback",
     );
 
-    // Authorize and submit
-    state.authorize_feedback(&AGENT_OWNER, b"job_guard", &CLIENT);
+    // Employer submits feedback (no authorize needed in ERC-8004)
     state.submit_feedback(&CLIENT, b"job_guard", 1, 90);
 
     // Duplicate feedback -> error
@@ -523,24 +602,36 @@ fn test_full_lifecycle() {
     // 2. Init job with payment
     state.init_job_with_payment(&CLIENT, b"lifecycle_job", 1, 1, "USDC-abcdef", 0, 200);
 
-    // 3. Submit proof
+    // 3. Submit proof (WORKER = agent)
     state.submit_proof(&WORKER, b"lifecycle_job", b"proof_lifecycle");
 
-    // 4. Verify job (owner)
-    state.verify_job(b"lifecycle_job");
-    assert!(state.query_is_job_verified(b"lifecycle_job"));
+    // 4. Validation request (agent owner)
+    state.validation_request(
+        &AGENT_OWNER,
+        b"lifecycle_job",
+        &VALIDATOR,
+        b"https://val.uri",
+        b"lifecycle_hash",
+    );
 
-    // 5. Authorize feedback
-    state.authorize_feedback(&AGENT_OWNER, b"lifecycle_job", &CLIENT);
+    // 5. Validation response (validator)
+    state.validation_response(
+        &VALIDATOR,
+        b"lifecycle_hash",
+        90,
+        b"https://resp.uri",
+        b"resp_hash",
+        b"approved",
+    );
 
-    // 6. Submit feedback
+    // 6. Submit feedback (employer, no authorize needed)
     state.submit_feedback(&CLIENT, b"lifecycle_job", 1, 95);
     assert_eq!(
         state.query_reputation_score(1),
         BigUint::<StaticApi>::from(95u64)
     );
 
-    // 7. Append response
+    // 7. Append response (permissionless in ERC-8004)
     state.append_response(&AGENT_OWNER, b"lifecycle_job", b"https://response.uri");
     let response = state.query_agent_response(b"lifecycle_job");
     assert_eq!(
@@ -921,11 +1012,11 @@ fn test_remove_service_configs_not_owner() {
 }
 
 // ============================================
-// 36. Authorize Feedback — Not Agent Owner
+// 36. Submit Proof — Agent Owner also allowed
 // ============================================
 
 #[test]
-fn test_authorize_feedback_not_agent_owner() {
+fn test_submit_proof_agent_owner() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &AGENT_OWNER,
@@ -936,25 +1027,22 @@ fn test_authorize_feedback_not_agent_owner() {
         vec![],
     );
 
-    state.init_job(&CLIENT, b"job-auth", 1, None);
-    state.submit_proof(&WORKER, b"job-auth", b"proof");
-    state.verify_job(b"job-auth");
+    state.init_job(&CLIENT, b"job-owner-proof", 1, None);
+    // Agent owner can also call submit_proof
+    state.submit_proof(&AGENT_OWNER, b"job-owner-proof", b"proof_from_owner");
 
-    // CLIENT (not agent owner) tries to authorize feedback
-    state.authorize_feedback_expect_err(
-        &CLIENT,
-        b"job-auth",
-        &CLIENT,
-        "Only the agent owner can perform this action",
-    );
+    let job = state.query_job_data(b"job-owner-proof");
+    if let OptionalValue::Some(data) = job {
+        assert_eq!(data.status, JobStatus::Pending);
+    }
 }
 
 // ============================================
-// 37. Submit Feedback — Job Not Verified
+// 37. Submit Feedback — Employer can submit without validation
 // ============================================
 
 #[test]
-fn test_submit_feedback_job_not_verified() {
+fn test_submit_feedback_no_validation_needed() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &AGENT_OWNER,
@@ -965,9 +1053,12 @@ fn test_submit_feedback_job_not_verified() {
         vec![],
     );
 
-    state.init_job(&CLIENT, b"job-unverified", 1, None);
-    // Don't verify — just try feedback
-    state.submit_feedback_expect_err(&CLIENT, b"job-unverified", 1, 80, "Job not verified");
+    state.init_job(&CLIENT, b"job-no-val", 1, None);
+    // ERC-8004: employer can submit feedback without needing validation
+    state.submit_feedback(&CLIENT, b"job-no-val", 1, 80);
+
+    let score = state.query_reputation_score(1);
+    assert_eq!(score, BigUint::<StaticApi>::from(80u64));
 }
 
 // ============================================
@@ -988,10 +1079,8 @@ fn test_submit_feedback_not_employer() {
 
     state.init_job(&CLIENT, b"job-wrong-caller", 1, None);
     state.submit_proof(&WORKER, b"job-wrong-caller", b"proof");
-    state.verify_job(b"job-wrong-caller");
 
-    // Authorize CLIENT but WORKER tries to submit
-    state.authorize_feedback(&AGENT_OWNER, b"job-wrong-caller", &CLIENT);
+    // WORKER (not employer) tries to submit feedback
     state.submit_feedback_expect_err(
         &WORKER,
         b"job-wrong-caller",
@@ -1002,11 +1091,11 @@ fn test_submit_feedback_not_employer() {
 }
 
 // ============================================
-// 39. Append Response — Not Agent Owner
+// 39. Append Response — Permissionless (ERC-8004)
 // ============================================
 
 #[test]
-fn test_append_response_not_agent_owner() {
+fn test_append_response_permissionless() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &AGENT_OWNER,
@@ -1019,14 +1108,14 @@ fn test_append_response_not_agent_owner() {
 
     state.init_job(&CLIENT, b"job-resp", 1, None);
     state.submit_proof(&WORKER, b"job-resp", b"proof");
-    state.verify_job(b"job-resp");
 
-    // CLIENT (not agent owner) tries to append response
-    state.append_response_expect_err(
-        &CLIENT,
-        b"job-resp",
-        b"https://response.uri",
-        "Only the agent owner can perform this action",
+    // ERC-8004: anyone can append response — CLIENT can do it
+    state.append_response(&CLIENT, b"job-resp", b"https://response.uri");
+
+    let response = state.query_agent_response(b"job-resp");
+    assert_eq!(
+        response,
+        ManagedBuffer::<StaticApi>::from(b"https://response.uri")
     );
 }
 

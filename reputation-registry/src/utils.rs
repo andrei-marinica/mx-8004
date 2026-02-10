@@ -18,10 +18,4 @@ pub trait UtilsModule:
 
         (weighted_score + rating) / total_big
     }
-
-    /// Resolve agent owner from identity-registry via cross-contract BiDiMapper read.
-    fn require_agent_owner(&self, agent_nonce: u64) -> ManagedAddress {
-        let identity_addr = self.identity_contract_address().get();
-        self.external_agents(identity_addr).get_value(&agent_nonce)
-    }
 }

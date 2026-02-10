@@ -9,6 +9,7 @@ pub enum JobStatus {
     New,
     Pending,
     Verified,
+    ValidationRequested,
 }
 
 #[type_abi]
@@ -19,6 +20,20 @@ pub struct JobData<M: ManagedTypeApi> {
     pub employer: ManagedAddress<M>,
     pub creation_timestamp: TimestampMillis,
     pub agent_nonce: u64,
+}
+
+// ── Validation types (ERC-8004 validationRequest/Response) ──
+
+#[type_abi]
+#[derive(TopEncode, TopDecode, NestedEncode, NestedDecode, PartialEq, Debug)]
+pub struct ValidationRequestData<M: ManagedTypeApi> {
+    pub validator_address: ManagedAddress<M>,
+    pub agent_nonce: u64,
+    pub job_id: ManagedBuffer<M>,
+    pub response: u8,
+    pub response_hash: ManagedBuffer<M>,
+    pub tag: ManagedBuffer<M>,
+    pub last_update: TimestampSeconds,
 }
 
 // ── Agent types (used by identity-registry) ──

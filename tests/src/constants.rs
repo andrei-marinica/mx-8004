@@ -6,6 +6,7 @@ pub const OWNER_ADDRESS: TestAddress = TestAddress::new("owner");
 pub const AGENT_OWNER: TestAddress = TestAddress::new("agent_owner");
 pub const CLIENT: TestAddress = TestAddress::new("client");
 pub const WORKER: TestAddress = TestAddress::new("worker");
+pub const VALIDATOR: TestAddress = TestAddress::new("validator");
 
 // ── SC Addresses ──
 pub const IDENTITY_SC_ADDRESS: TestSCAddress = TestSCAddress::new("identity-registry");

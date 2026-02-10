@@ -298,14 +298,53 @@ impl CsInteract {
             .await;
     }
 
-    pub async fn verify_job(&mut self, job_id: &[u8]) {
+    pub async fn validation_request(
+        &mut self,
+        from: &Address,
+        job_id: &[u8],
+        validator: &Address,
+        request_uri: &[u8],
+        request_hash: &[u8],
+    ) {
         self.interactor
             .tx()
-            .from(&self.owner)
+            .from(from)
             .to(&self.validation_addr)
             .gas(30_000_000u64)
             .typed(ValidationRegistryProxy)
-            .verify_job(ManagedBuffer::<StaticApi>::from(job_id))
+            .validation_request(
+                ManagedBuffer::<StaticApi>::from(job_id),
+                ManagedAddress::<StaticApi>::from(validator),
+                ManagedBuffer::<StaticApi>::from(request_uri),
+                ManagedBuffer::<StaticApi>::from(request_hash),
+            )
+            .returns(ReturnsResultUnmanaged)
+            .run()
+            .await;
+    }
+
+    pub async fn validation_response(
+        &mut self,
+        from: &Address,
+        request_hash: &[u8],
+        response: u8,
+        response_uri: &[u8],
+        response_hash: &[u8],
+        tag: &[u8],
+    ) {
+        self.interactor
+            .tx()
+            .from(from)
+            .to(&self.validation_addr)
+            .gas(30_000_000u64)
+            .typed(ValidationRegistryProxy)
+            .validation_response(
+                ManagedBuffer::<StaticApi>::from(request_hash),
+                response,
+                ManagedBuffer::<StaticApi>::from(response_uri),
+                ManagedBuffer::<StaticApi>::from(response_hash),
+                ManagedBuffer::<StaticApi>::from(tag),
+            )
             .returns(ReturnsResultUnmanaged)
             .run()
             .await;
@@ -313,26 +352,7 @@ impl CsInteract {
 
     // ── Reputation Registry ──
 
-    pub async fn authorize_feedback(
-        &mut self,
-        from: &Address,
-        job_id: &[u8],
-        client_addr: &Address,
-    ) {
-        self.interactor
-            .tx()
-            .from(from)
-            .to(&self.reputation_addr)
-            .gas(30_000_000u64)
-            .typed(ReputationRegistryProxy)
-            .authorize_feedback(
-                ManagedBuffer::<StaticApi>::from(job_id),
-                ManagedAddress::<StaticApi>::from(client_addr),
-            )
-            .returns(ReturnsResultUnmanaged)
-            .run()
-            .await;
-    }
+    // authorize_feedback removed — ERC-8004 compliance
 
     pub async fn submit_feedback(
         &mut self,
@@ -461,24 +481,7 @@ impl CsInteract {
             .await;
     }
 
-    pub async fn verify_job_expect_err(
-        &mut self,
-        from: &Address,
-        job_id: &[u8],
-        err_code: u64,
-        err_msg: &str,
-    ) {
-        self.interactor
-            .tx()
-            .from(from)
-            .to(&self.validation_addr)
-            .gas(30_000_000u64)
-            .typed(ValidationRegistryProxy)
-            .verify_job(ManagedBuffer::<StaticApi>::from(job_id))
-            .returns(ExpectError(err_code, err_msg))
-            .run()
-            .await;
-    }
+    // verify_job_expect_err removed — ERC-8004 compliance
 
     pub async fn submit_proof_expect_err(
         &mut self,

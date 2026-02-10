@@ -27,4 +27,11 @@ pub trait CrossContractModule {
         address: ManagedAddress,
         nonce: u64,
     ) -> MapMapper<u32, Payment<Self::Api>, ManagedAddress<Self::Api>>;
+
+    /// Read agent token ID from identity-registry's NonFungibleTokenMapper.
+    #[storage_mapper_from_address("agentTokenId")]
+    fn external_agent_token_id(
+        &self,
+        address: ManagedAddress,
+    ) -> SingleValueMapper<TokenIdentifier, ManagedAddress<Self::Api>>;
 }

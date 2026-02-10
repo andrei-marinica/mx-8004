@@ -92,16 +92,131 @@ pub trait ValidationRegistry:
         });
     }
 
-    #[only_owner]
-    #[endpoint(verify_job)]
-    fn verify_job(&self, job_id: ManagedBuffer) {
+    /// NFT-holder variant: proves ownership by sending the agent NFT.
+    /// The contract verifies token ID + nonce, executes proof, and returns the NFT.
+    #[payable("*")]
+    #[endpoint(submit_proof_with_nft)]
+    fn submit_proof_with_nft(&self, job_id: ManagedBuffer, proof: ManagedBuffer) {
         let job_mapper = self.job_data(&job_id);
         require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
 
+        let payment = self.call_value().single_esdt();
+        let job_data = job_mapper.get();
+
+        // Read agent token ID from identity-registry
+        let identity_addr = self.identity_registry_address().get();
+        let expected_token_id = self.external_agent_token_id(identity_addr).get();
+        require!(
+            payment.token_identifier == expected_token_id,
+            ERR_INVALID_AGENT_NFT
+        );
+        require!(
+            payment.token_nonce == job_data.agent_nonce,
+            ERR_INVALID_AGENT_NFT
+        );
+
         job_mapper.update(|job| {
-            job.status = JobStatus::Verified;
-            self.job_verified_event(job_id, job.agent_nonce, JobStatus::Verified);
+            job.proof = proof;
+            job.status = JobStatus::Pending;
         });
+
+        // Return NFT to caller
+        let caller = self.blockchain().get_caller();
+        self.tx()
+            .to(&caller)
+            .single_esdt(
+                &payment.token_identifier,
+                payment.token_nonce,
+                &payment.amount,
+            )
+            .transfer();
+    }
+
+    /// ERC-8004: Agent requests validation from a specific validator.
+    /// MUST be called by the owner of the agent (agentId).
+    #[endpoint(validation_request)]
+    fn validation_request(
+        &self,
+        job_id: ManagedBuffer,
+        validator_address: ManagedAddress,
+        request_uri: ManagedBuffer,
+        request_hash: ManagedBuffer,
+    ) {
+        let job_mapper = self.job_data(&job_id);
+        require!(!job_mapper.is_empty(), ERR_JOB_NOT_FOUND);
+
+        let job_data = job_mapper.get();
+
+        // Caller must be agent owner
+        let caller = self.blockchain().get_caller();
+        let identity_addr = self.identity_registry_address().get();
+        let agent_owner = self
+            .external_agents(identity_addr)
+            .get_value(&job_data.agent_nonce);
+        require!(caller == agent_owner, ERR_NOT_AGENT_OWNER);
+
+        // Store validation request
+        let request_data = ValidationRequestData {
+            validator_address: validator_address.clone(),
+            agent_nonce: job_data.agent_nonce,
+            job_id: job_id.clone(),
+            response: 0,
+            response_hash: ManagedBuffer::new(),
+            tag: ManagedBuffer::new(),
+            last_update: TimestampSeconds::new(0),
+        };
+
+        self.validation_request_data(&request_hash)
+            .set(&request_data);
+        self.agent_validations(job_data.agent_nonce)
+            .insert(request_hash.clone());
+
+        // Update job status
+        job_mapper.update(|job| {
+            job.status = JobStatus::ValidationRequested;
+        });
+
+        self.validation_request_event(
+            validator_address,
+            job_data.agent_nonce,
+            request_uri,
+            request_hash,
+        );
+    }
+
+    /// ERC-8004: Validator responds with a result (0-100).
+    /// MUST be called by the validatorAddress from the original request.
+    /// Can be called multiple times for progressive validation.
+    #[endpoint(validation_response)]
+    fn validation_response(
+        &self,
+        request_hash: ManagedBuffer,
+        response: u8,
+        _response_uri: ManagedBuffer,
+        response_hash: ManagedBuffer,
+        tag: ManagedBuffer,
+    ) {
+        let request_mapper = self.validation_request_data(&request_hash);
+        require!(!request_mapper.is_empty(), ERR_VALIDATION_REQUEST_NOT_FOUND);
+
+        let caller = self.blockchain().get_caller();
+
+        request_mapper.update(|data| {
+            require!(caller == data.validator_address, ERR_NOT_VALIDATOR);
+
+            data.response = response;
+            data.response_hash = response_hash;
+            data.tag = tag;
+            data.last_update = self.blockchain().get_block_timestamp_seconds();
+        });
+
+        let updated_data = request_mapper.get();
+        self.validation_response_event(
+            caller,
+            updated_data.agent_nonce,
+            request_hash,
+            updated_data,
+        );
     }
 
     #[endpoint(clean_old_jobs)]

@@ -6,9 +6,9 @@
 
 // Init:                                 1
 // Upgrade:                              1
-// Endpoints:                            7
+// Endpoints:                           11
 // Async Callback (empty):               1
-// Total number of exported functions:  10
+// Total number of exported functions:  14
 
 #![no_std]
 
@@ -22,10 +22,14 @@ multiversx_sc_wasm_adapter::endpoints! {
         upgrade => upgrade
         init_job => init_job
         submit_proof => submit_proof
-        verify_job => verify_job
+        submit_proof_with_nft => submit_proof_with_nft
+        validation_request => validation_request
+        validation_response => validation_response
         clean_old_jobs => clean_old_jobs
         is_job_verified => is_job_verified
         get_job_data => get_job_data
+        get_validation_status => get_validation_status
+        get_agent_validations => get_agent_validations
         set_identity_registry_address => set_identity_registry_address
     )
 }
