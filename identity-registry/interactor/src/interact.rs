@@ -179,8 +179,8 @@ impl ContractInteract {
         let name = ManagedBuffer::new_from_bytes(&b""[..]);
         let uri = ManagedBuffer::new_from_bytes(&b""[..]);
         let public_key = ManagedBuffer::new_from_bytes(&b""[..]);
-        let metadata = MultiValueEncodedCounted::<StaticApi, MetadataEntry<StaticApi>>::new();
-        let services = MultiValueEncodedCounted::<StaticApi, ServiceConfigInput<StaticApi>>::new();
+        let metadata = MultiValueVec::<MetadataEntry<StaticApi>>::new();
+        let services = MultiValueVec::<ServiceConfigInput<StaticApi>>::new();
 
         let response = self
             .interactor
@@ -205,14 +205,8 @@ impl ContractInteract {
         let new_name = ManagedBuffer::new_from_bytes(&b""[..]);
         let new_uri = ManagedBuffer::new_from_bytes(&b""[..]);
         let new_public_key = ManagedBuffer::new_from_bytes(&b""[..]);
-        let metadata = OptionalValue::Some(MultiValueEncodedCounted::<
-            StaticApi,
-            MetadataEntry<StaticApi>,
-        >::new());
-        let services = OptionalValue::Some(MultiValueEncodedCounted::<
-            StaticApi,
-            ServiceConfigInput<StaticApi>,
-        >::new());
+        let metadata = OptionalValue::Some(MultiValueVec::<MetadataEntry<StaticApi>>::new());
+        let services = OptionalValue::Some(MultiValueVec::<ServiceConfigInput<StaticApi>>::new());
 
         let response = self
             .interactor
@@ -236,7 +230,7 @@ impl ContractInteract {
 
     pub async fn set_metadata(&mut self) {
         let nonce = 0u64;
-        let entries = MultiValueEncodedCounted::<StaticApi, MetadataEntry<StaticApi>>::new();
+        let entries = MultiValueVec::<MetadataEntry<StaticApi>>::new();
 
         let response = self
             .interactor
@@ -255,7 +249,7 @@ impl ContractInteract {
 
     pub async fn set_service_configs_endpoint(&mut self) {
         let nonce = 0u64;
-        let configs = MultiValueEncodedCounted::<StaticApi, ServiceConfigInput<StaticApi>>::new();
+        let configs = MultiValueVec::<ServiceConfigInput<StaticApi>>::new();
 
         let response = self
             .interactor
