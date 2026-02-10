@@ -16,6 +16,7 @@ use proxies::{
     reputation_registry_proxy::ReputationRegistryProxy,
     validation_registry_proxy::ValidationRegistryProxy,
 };
+use validation_registry::storage::ExternalStorageModule;
 
 pub fn world() -> ScenarioWorld {
     let mut blockchain = ScenarioWorld::new();
@@ -359,6 +360,52 @@ impl AgentTestState {
             .to(VALIDATION_SC_ADDRESS)
             .typed(ValidationRegistryProxy)
             .submit_proof(ManagedBuffer::from(job_id), ManagedBuffer::from(proof))
+            .run();
+    }
+
+    pub fn submit_proof_with_nft(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        proof: &[u8],
+        token_id: &multiversx_sc::types::TestTokenIdentifier,
+        nonce: u64,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .submit_proof_with_nft(ManagedBuffer::from(job_id), ManagedBuffer::from(proof))
+            .single_esdt(
+                &TokenIdentifier::from(*token_id),
+                nonce,
+                &BigUint::from(1u64),
+            )
+            .run();
+    }
+
+    pub fn submit_proof_with_nft_expect_err(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        proof: &[u8],
+        token_id: &multiversx_sc::types::TestTokenIdentifier,
+        nonce: u64,
+        err_msg: &str,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .submit_proof_with_nft(ManagedBuffer::from(job_id), ManagedBuffer::from(proof))
+            .single_esdt(
+                &TokenIdentifier::from(*token_id),
+                nonce,
+                &BigUint::from(1u64),
+            )
+            .returns(ExpectMessage(err_msg))
             .run();
     }
 
@@ -1137,5 +1184,417 @@ impl AgentTestState {
             .identity_contract_address()
             .returns(ReturnsResult)
             .run()
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// Escrow Test State — extends AgentTestState with Escrow SC
+// ════════════════════════════════════════════════════════════
+
+use escrow::storage::EscrowData;
+use proxies::escrow_proxy::EscrowProxy;
+
+pub struct EscrowTestState {
+    pub world: ScenarioWorld,
+    pub identity_sc: ManagedAddress<StaticApi>,
+    pub validation_sc: ManagedAddress<StaticApi>,
+    pub reputation_sc: ManagedAddress<StaticApi>,
+    pub escrow_sc: ManagedAddress<StaticApi>,
+}
+
+impl Default for EscrowTestState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EscrowTestState {
+    pub fn new() -> Self {
+        let mut blockchain = ScenarioWorld::new();
+        blockchain.register_contract(IDENTITY_CODE, identity_registry::ContractBuilder);
+        blockchain.register_contract(VALIDATION_CODE, validation_registry::ContractBuilder);
+        blockchain.register_contract(REPUTATION_CODE, reputation_registry::ContractBuilder);
+        blockchain.register_contract(ESCROW_CODE, escrow::ContractBuilder);
+
+        let mut world = blockchain;
+
+        world
+            .account(OWNER_ADDRESS)
+            .nonce(1)
+            .balance(100_000_000_000_000_000u64);
+
+        let identity_sc = world
+            .tx()
+            .from(OWNER_ADDRESS)
+            .typed(IdentityRegistryProxy)
+            .init()
+            .code(IDENTITY_CODE)
+            .returns(ReturnsNewManagedAddress)
+            .new_address(IDENTITY_SC_ADDRESS)
+            .run();
+
+        world
+            .tx()
+            .from(OWNER_ADDRESS)
+            .to(IDENTITY_SC_ADDRESS)
+            .whitebox(identity_registry::contract_obj, |sc| {
+                sc.agent_token_id()
+                    .set_token_id(AGENT_TOKEN.to_token_identifier());
+            });
+
+        world.set_esdt_local_roles(IDENTITY_SC_ADDRESS, AGENT_TOKEN.as_bytes(), NFT_ROLES);
+
+        let validation_sc = world
+            .tx()
+            .from(OWNER_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .init(identity_sc.clone())
+            .code(VALIDATION_CODE)
+            .returns(ReturnsNewManagedAddress)
+            .new_address(VALIDATION_SC_ADDRESS)
+            .run();
+
+        let reputation_sc = world
+            .tx()
+            .from(OWNER_ADDRESS)
+            .typed(ReputationRegistryProxy)
+            .init(validation_sc.clone(), identity_sc.clone())
+            .code(REPUTATION_CODE)
+            .returns(ReturnsNewManagedAddress)
+            .new_address(REPUTATION_SC_ADDRESS)
+            .run();
+
+        // Deploy escrow with validation + identity addresses
+        let escrow_sc = world
+            .tx()
+            .from(OWNER_ADDRESS)
+            .typed(EscrowProxy)
+            .init(validation_sc.clone(), identity_sc.clone())
+            .code(ESCROW_CODE)
+            .returns(ReturnsNewManagedAddress)
+            .new_address(ESCROW_SC_ADDRESS)
+            .run();
+
+        // Set up accounts
+        world.account(AGENT_OWNER).nonce(1).balance(1_000_000u64);
+        world
+            .account(CLIENT)
+            .nonce(1)
+            .balance(1_000_000u64)
+            .esdt_balance(PAYMENT_TOKEN, 1_000_000_000u64)
+            .esdt_balance(WRONG_TOKEN, 1_000_000_000u64);
+        world.account(WORKER).nonce(1).balance(1_000_000u64);
+        world.account(VALIDATOR).nonce(1).balance(1_000_000u64);
+        world
+            .account(EMPLOYER)
+            .nonce(1)
+            .balance(10_000_000_000u64)
+            .esdt_balance(PAYMENT_TOKEN, 1_000_000_000u64);
+
+        Self {
+            world,
+            identity_sc,
+            validation_sc,
+            reputation_sc,
+            escrow_sc,
+        }
+    }
+
+    // ── Agent registration (reuse pattern) ──
+
+    pub fn register_agent(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        name: &[u8],
+        uri: &[u8],
+        pubkey: &[u8],
+        metadata: Vec<(&[u8], &[u8])>,
+        services: Vec<(u32, u64, &[u8], u64)>,
+    ) {
+        let mut args = ManagedArgBuffer::<StaticApi>::new();
+        args.push_arg(ManagedBuffer::<StaticApi>::from(name));
+        args.push_arg(ManagedBuffer::<StaticApi>::from(uri));
+        args.push_arg(ManagedBuffer::<StaticApi>::from(pubkey));
+        args.push_arg(metadata.len());
+        for (k, v) in &metadata {
+            args.push_arg(MetadataEntry::<StaticApi> {
+                key: ManagedBuffer::from(*k),
+                value: ManagedBuffer::from(*v),
+            });
+        }
+        args.push_arg(services.len());
+        for (sid, price, token, nonce) in &services {
+            args.push_arg(ServiceConfigInput::<StaticApi> {
+                service_id: *sid,
+                price: BigUint::from(*price),
+                token: TokenId::from(*token),
+                nonce: *nonce,
+            });
+        }
+        self.world
+            .tx()
+            .from(*from)
+            .to(IDENTITY_SC_ADDRESS)
+            .raw_call("register_agent")
+            .arguments_raw(args)
+            .run();
+    }
+
+    // ── Validation helpers ──
+
+    pub fn init_job(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        agent_nonce: u64,
+        service_id: Option<u32>,
+    ) {
+        let svc = match service_id {
+            Some(sid) => OptionalValue::Some(sid),
+            None => OptionalValue::None,
+        };
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .init_job(ManagedBuffer::from(job_id), agent_nonce, svc)
+            .run();
+    }
+
+    pub fn submit_proof(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        proof: &[u8],
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .submit_proof(ManagedBuffer::from(job_id), ManagedBuffer::from(proof))
+            .run();
+    }
+
+    pub fn validation_request(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        validator: &multiversx_sc::types::TestAddress,
+        request_uri: &[u8],
+        request_hash: &[u8],
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .validation_request(
+                ManagedBuffer::from(job_id),
+                validator.to_managed_address(),
+                ManagedBuffer::from(request_uri),
+                ManagedBuffer::from(request_hash),
+            )
+            .run();
+    }
+
+    pub fn validation_response(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        request_hash: &[u8],
+        response: u8,
+        response_uri: &[u8],
+        response_hash: &[u8],
+        tag: &[u8],
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .validation_response(
+                ManagedBuffer::from(request_hash),
+                response,
+                ManagedBuffer::from(response_uri),
+                ManagedBuffer::from(response_hash),
+                ManagedBuffer::from(tag),
+            )
+            .run();
+    }
+
+    // ── Escrow actions ──
+
+    pub fn deposit_egld(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        receiver: &multiversx_sc::types::TestAddress,
+        poa_hash: &[u8],
+        deadline: u64,
+        amount: u64,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .deposit(
+                ManagedBuffer::from(job_id),
+                receiver.to_managed_address(),
+                ManagedBuffer::from(poa_hash),
+                deadline,
+            )
+            .egld(amount)
+            .run();
+    }
+
+    pub fn deposit_egld_expect_err(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        receiver: &multiversx_sc::types::TestAddress,
+        poa_hash: &[u8],
+        deadline: u64,
+        amount: u64,
+        err_msg: &str,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .deposit(
+                ManagedBuffer::from(job_id),
+                receiver.to_managed_address(),
+                ManagedBuffer::from(poa_hash),
+                deadline,
+            )
+            .egld(amount)
+            .returns(ExpectMessage(err_msg))
+            .run();
+    }
+
+    pub fn deposit_esdt(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        receiver: &multiversx_sc::types::TestAddress,
+        poa_hash: &[u8],
+        deadline: u64,
+        token: &str,
+        token_nonce: u64,
+        amount: u64,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .deposit(
+                ManagedBuffer::from(job_id),
+                receiver.to_managed_address(),
+                ManagedBuffer::from(poa_hash),
+                deadline,
+            )
+            .esdt(TestEsdtTransfer(
+                multiversx_sc_scenario::imports::TestTokenIdentifier::new(token),
+                token_nonce,
+                amount,
+            ))
+            .run();
+    }
+
+    pub fn release(&mut self, from: &multiversx_sc::types::TestAddress, job_id: &[u8]) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .release(ManagedBuffer::from(job_id))
+            .run();
+    }
+
+    pub fn release_expect_err(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        err_msg: &str,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .release(ManagedBuffer::from(job_id))
+            .returns(ExpectMessage(err_msg))
+            .run();
+    }
+
+    pub fn refund(&mut self, from: &multiversx_sc::types::TestAddress, job_id: &[u8]) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .refund(ManagedBuffer::from(job_id))
+            .run();
+    }
+
+    pub fn refund_expect_err(
+        &mut self,
+        from: &multiversx_sc::types::TestAddress,
+        job_id: &[u8],
+        err_msg: &str,
+    ) {
+        self.world
+            .tx()
+            .from(*from)
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .refund(ManagedBuffer::from(job_id))
+            .returns(ExpectMessage(err_msg))
+            .run();
+    }
+
+    // ── Escrow queries ──
+
+    pub fn query_escrow(&mut self, job_id: &[u8]) -> EscrowData<StaticApi> {
+        self.world
+            .query()
+            .to(ESCROW_SC_ADDRESS)
+            .typed(EscrowProxy)
+            .get_escrow(ManagedBuffer::from(job_id))
+            .returns(ReturnsResult)
+            .run()
+    }
+
+    pub fn query_is_job_verified(&mut self, job_id: &[u8]) -> bool {
+        self.world
+            .query()
+            .to(VALIDATION_SC_ADDRESS)
+            .typed(ValidationRegistryProxy)
+            .is_job_verified(ManagedBuffer::from(job_id))
+            .returns(ReturnsResult)
+            .run()
+    }
+
+    /// Whitebox helper: directly set job status to Verified in the validation registry.
+    ///
+    /// NOTE: The current `validation_response` endpoint does NOT transition job status
+    /// to `Verified` — it only updates `ValidationRequestData`. This is a known gap
+    /// in the validation registry design. This helper simulates the expected behavior
+    /// for escrow release testing.
+    pub fn mark_job_verified(&mut self, job_id: &[u8]) {
+        self.world
+            .tx()
+            .from(OWNER_ADDRESS)
+            .to(VALIDATION_SC_ADDRESS)
+            .whitebox(validation_registry::contract_obj, |sc| {
+                let job_id_buf = ManagedBuffer::from(job_id);
+                sc.job_data(&job_id_buf).update(|job| {
+                    job.status = common::structs::JobStatus::Verified;
+                });
+            });
     }
 }

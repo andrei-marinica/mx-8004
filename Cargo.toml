@@ -9,5 +9,7 @@ members = [
     "validation-registry/meta",
     "reputation-registry",
     "reputation-registry/meta",
+    "escrow",
+    "escrow/meta",
     "tests"
 ]

@@ -1,5 +1,5 @@
 [package]
-name = "proxies"
+name = "escrow"
 version = "0.1.0"
 authors = ["Antigravity"]
 edition = "2024"
@@ -11,5 +11,9 @@ version = "0.64.1"
 [dependencies.common]
 path = "../common"
 
-[dependencies.escrow]
-path = "../escrow"
+[dev-dependencies.multiversx-sc-scenario]
+version = "0.64.1"
+
+[lib]
+path = "src/lib.rs"
+name = "escrow"

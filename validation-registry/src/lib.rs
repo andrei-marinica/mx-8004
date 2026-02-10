@@ -211,6 +211,15 @@ pub trait ValidationRegistry:
         });
 
         let updated_data = request_mapper.get();
+
+        // Transition job status to Verified
+        let job_mapper = self.job_data(&updated_data.job_id);
+        if !job_mapper.is_empty() {
+            job_mapper.update(|job| {
+                job.status = JobStatus::Verified;
+            });
+        }
+
         self.validation_response_event(
             caller,
             updated_data.agent_nonce,
