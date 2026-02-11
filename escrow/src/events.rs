@@ -2,7 +2,7 @@ multiversx_sc::imports!();
 
 #[multiversx_sc::module]
 pub trait EventsModule {
-    #[event("escrow_deposited")]
+    #[event("escrowDeposited")]
     fn escrow_deposited_event(
         &self,
         #[indexed] job_id: &ManagedBuffer,
@@ -10,7 +10,7 @@ pub trait EventsModule {
         amount: &NonZeroBigUint,
     );
 
-    #[event("escrow_released")]
+    #[event("escrowReleased")]
     fn escrow_released_event(
         &self,
         #[indexed] job_id: &ManagedBuffer,
@@ -18,7 +18,7 @@ pub trait EventsModule {
         amount: &NonZeroBigUint,
     );
 
-    #[event("escrow_refunded")]
+    #[event("escrowRefunded")]
     fn escrow_refunded_event(
         &self,
         #[indexed] job_id: &ManagedBuffer,
