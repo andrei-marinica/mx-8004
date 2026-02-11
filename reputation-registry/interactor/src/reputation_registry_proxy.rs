@@ -88,9 +88,9 @@ where
     To: TxTo<Env>,
     Gas: TxGas<Env>,
 {
-    /// Submit feedback for a job. Caller must be the employer who created the job. 
-    /// Job must have a validation response recorded (no pre-authorization needed). 
-    pub fn submit_feedback<
+    /// Simple feedback for a job. Caller must be the employer who created the job. 
+    /// Computes a cumulative moving average on-chain. 
+    pub fn give_feedback_simple<
         Arg0: ProxyArg<ManagedBuffer<Env::Api>>,
         Arg1: ProxyArg<u64>,
         Arg2: ProxyArg<BigUint<Env::Api>>,
@@ -102,10 +102,82 @@ where
     ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
         self.wrapped_tx
             .payment(NotPayable)
-            .raw_call("submit_feedback")
+            .raw_call("giveFeedbackSimple")
             .argument(&job_id)
             .argument(&agent_nonce)
             .argument(&rating)
+            .original_result()
+    }
+
+    /// ERC-8004: Anyone can give feedback (except the agent owner). 
+    /// Stores raw signals — no on-chain scoring. Off-chain aggregation expected. 
+    pub fn give_feedback<
+        Arg0: ProxyArg<u64>,
+        Arg1: ProxyArg<i64>,
+        Arg2: ProxyArg<u8>,
+        Arg3: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg4: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg5: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg6: ProxyArg<ManagedBuffer<Env::Api>>,
+        Arg7: ProxyArg<ManagedBuffer<Env::Api>>,
+    >(
+        self,
+        agent_nonce: Arg0,
+        value: Arg1,
+        value_decimals: Arg2,
+        tag1: Arg3,
+        tag2: Arg4,
+        endpoint: Arg5,
+        feedback_uri: Arg6,
+        feedback_hash: Arg7,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("giveFeedback")
+            .argument(&agent_nonce)
+            .argument(&value)
+            .argument(&value_decimals)
+            .argument(&tag1)
+            .argument(&tag2)
+            .argument(&endpoint)
+            .argument(&feedback_uri)
+            .argument(&feedback_hash)
+            .original_result()
+    }
+
+    /// ERC-8004: Only the original feedback author can revoke their feedback. 
+    pub fn revoke_feedback<
+        Arg0: ProxyArg<u64>,
+        Arg1: ProxyArg<u64>,
+    >(
+        self,
+        agent_nonce: Arg0,
+        feedback_index: Arg1,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, ()> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("revokeFeedback")
+            .argument(&agent_nonce)
+            .argument(&feedback_index)
+            .original_result()
+    }
+
+    pub fn read_feedback<
+        Arg0: ProxyArg<u64>,
+        Arg1: ProxyArg<ManagedAddress<Env::Api>>,
+        Arg2: ProxyArg<u64>,
+    >(
+        self,
+        agent_nonce: Arg0,
+        client: Arg1,
+        feedback_index: Arg2,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, FeedbackData<Env::Api>> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("readFeedback")
+            .argument(&agent_nonce)
+            .argument(&client)
+            .argument(&feedback_index)
             .original_result()
     }
 
@@ -197,6 +269,35 @@ where
             .original_result()
     }
 
+    pub fn last_feedback_index<
+        Arg0: ProxyArg<u64>,
+        Arg1: ProxyArg<ManagedAddress<Env::Api>>,
+    >(
+        self,
+        agent_nonce: Arg0,
+        client: Arg1,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, u64> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("getLastIndex")
+            .argument(&agent_nonce)
+            .argument(&client)
+            .original_result()
+    }
+
+    pub fn feedback_clients<
+        Arg0: ProxyArg<u64>,
+    >(
+        self,
+        agent_nonce: Arg0,
+    ) -> TxTypedCall<Env, From, To, NotPayable, Gas, MultiValueEncoded<Env::Api, ManagedAddress<Env::Api>>> {
+        self.wrapped_tx
+            .payment(NotPayable)
+            .raw_call("getClients")
+            .argument(&agent_nonce)
+            .original_result()
+    }
+
     pub fn set_identity_contract_address<
         Arg0: ProxyArg<ManagedAddress<Env::Api>>,
     >(
@@ -222,4 +323,33 @@ where
             .argument(&address)
             .original_result()
     }
+}
+
+#[type_abi]
+#[derive(TopEncode, TopDecode, NestedEncode, NestedDecode, PartialEq, Debug)]
+pub struct FeedbackData<Api>
+where
+    Api: ManagedTypeApi,
+{
+    pub value: i64,
+    pub value_decimals: u8,
+    pub tag1: ManagedBuffer<Api>,
+    pub tag2: ManagedBuffer<Api>,
+    pub is_revoked: bool,
+}
+
+#[type_abi]
+#[derive(TopEncode, TopDecode, NestedEncode, NestedDecode)]
+pub struct NewFeedbackEventData<Api>
+where
+    Api: ManagedTypeApi,
+{
+    pub feedback_index: u64,
+    pub value: i64,
+    pub value_decimals: u8,
+    pub tag1: ManagedBuffer<Api>,
+    pub tag2: ManagedBuffer<Api>,
+    pub endpoint: ManagedBuffer<Api>,
+    pub feedback_uri: ManagedBuffer<Api>,
+    pub feedback_hash: ManagedBuffer<Api>,
 }

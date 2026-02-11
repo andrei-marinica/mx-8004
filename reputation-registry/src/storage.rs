@@ -1,11 +1,12 @@
 multiversx_sc::imports!();
 multiversx_sc::derive_imports!();
 
+use crate::structs::FeedbackData;
 pub use common::structs::{JobData, JobStatus};
 
 #[multiversx_sc::module]
 pub trait StorageModule: common::cross_contract::CrossContractModule {
-    // ── Local storage ──
+    // ── Local storage (giveFeedbackSimple — on-chain scoring) ──
 
     #[view(get_reputation_score)]
     #[storage_mapper("reputationScore")]
@@ -30,4 +31,26 @@ pub trait StorageModule: common::cross_contract::CrossContractModule {
     #[view(get_agent_response)]
     #[storage_mapper("agentResponse")]
     fn agent_response(&self, job_id: ManagedBuffer) -> SingleValueMapper<ManagedBuffer>;
+
+    // ── ERC-8004 feedback storage (giveFeedback — raw signals) ──
+
+    #[storage_mapper("feedbackData")]
+    fn feedback_data(
+        &self,
+        agent_nonce: u64,
+        client: &ManagedAddress,
+        index: u64,
+    ) -> SingleValueMapper<FeedbackData<Self::Api>>;
+
+    #[view(getLastIndex)]
+    #[storage_mapper("lastFeedbackIndex")]
+    fn last_feedback_index(
+        &self,
+        agent_nonce: u64,
+        client: &ManagedAddress,
+    ) -> SingleValueMapper<u64>;
+
+    #[view(getClients)]
+    #[storage_mapper("feedbackClients")]
+    fn feedback_clients(&self, agent_nonce: u64) -> UnorderedSetMapper<ManagedAddress>;
 }

@@ -528,7 +528,7 @@ fn test_full_feedback_flow() {
     state.submit_proof(&WORKER, b"job_fb", b"proof");
 
     // ERC-8004: employer (CLIENT) submits feedback directly — no authorization needed
-    state.submit_feedback(&CLIENT, b"job_fb", 1, 80);
+    state.give_feedback_simple(&CLIENT, b"job_fb", 1, 80);
 
     // Verify reputation updated
     let score = state.query_reputation_score(1);
@@ -560,7 +560,7 @@ fn test_feedback_guards() {
     state.submit_proof(&WORKER, b"job_guard", b"proof");
 
     // Non-employer tries to submit feedback -> error
-    state.submit_feedback_expect_err(
+    state.give_feedback_simple_expect_err(
         &WORKER,
         b"job_guard",
         1,
@@ -569,10 +569,10 @@ fn test_feedback_guards() {
     );
 
     // Employer submits feedback (no authorize needed in ERC-8004)
-    state.submit_feedback(&CLIENT, b"job_guard", 1, 90);
+    state.give_feedback_simple(&CLIENT, b"job_guard", 1, 90);
 
     // Duplicate feedback -> error
-    state.submit_feedback_expect_err(
+    state.give_feedback_simple_expect_err(
         &CLIENT,
         b"job_guard",
         1,
@@ -625,7 +625,7 @@ fn test_full_lifecycle() {
     );
 
     // 6. Submit feedback (employer, no authorize needed)
-    state.submit_feedback(&CLIENT, b"lifecycle_job", 1, 95);
+    state.give_feedback_simple(&CLIENT, b"lifecycle_job", 1, 95);
     assert_eq!(
         state.query_reputation_score(1),
         BigUint::<StaticApi>::from(95u64)
@@ -1042,7 +1042,7 @@ fn test_submit_proof_agent_owner() {
 // ============================================
 
 #[test]
-fn test_submit_feedback_no_validation_needed() {
+fn test_give_feedback_simple_no_validation_needed() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &AGENT_OWNER,
@@ -1055,7 +1055,7 @@ fn test_submit_feedback_no_validation_needed() {
 
     state.init_job(&CLIENT, b"job-no-val", 1, None);
     // ERC-8004: employer can submit feedback without needing validation
-    state.submit_feedback(&CLIENT, b"job-no-val", 1, 80);
+    state.give_feedback_simple(&CLIENT, b"job-no-val", 1, 80);
 
     let score = state.query_reputation_score(1);
     assert_eq!(score, BigUint::<StaticApi>::from(80u64));
@@ -1066,7 +1066,7 @@ fn test_submit_feedback_no_validation_needed() {
 // ============================================
 
 #[test]
-fn test_submit_feedback_not_employer() {
+fn test_give_feedback_simple_not_employer() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &AGENT_OWNER,
@@ -1081,7 +1081,7 @@ fn test_submit_feedback_not_employer() {
     state.submit_proof(&WORKER, b"job-wrong-caller", b"proof");
 
     // WORKER (not employer) tries to submit feedback
-    state.submit_feedback_expect_err(
+    state.give_feedback_simple_expect_err(
         &WORKER,
         b"job-wrong-caller",
         1,
@@ -1407,7 +1407,7 @@ fn test_multi_job_reputation_average() {
         b"resp-avg-1",
         b"approved",
     );
-    state.submit_feedback(&OWNER_ADDRESS, b"rep_avg_1", 1, 80);
+    state.give_feedback_simple(&OWNER_ADDRESS, b"rep_avg_1", 1, 80);
 
     // Job 2: rating 60
     state.init_job(&OWNER_ADDRESS, b"rep_avg_2", 1, None);
@@ -1427,7 +1427,7 @@ fn test_multi_job_reputation_average() {
         b"resp-avg-2",
         b"approved",
     );
-    state.submit_feedback(&OWNER_ADDRESS, b"rep_avg_2", 1, 60);
+    state.give_feedback_simple(&OWNER_ADDRESS, b"rep_avg_2", 1, 60);
 
     // Job 3: rating 100
     state.init_job(&OWNER_ADDRESS, b"rep_avg_3", 1, None);
@@ -1447,7 +1447,7 @@ fn test_multi_job_reputation_average() {
         b"resp-avg-3",
         b"approved",
     );
-    state.submit_feedback(&OWNER_ADDRESS, b"rep_avg_3", 1, 100);
+    state.give_feedback_simple(&OWNER_ADDRESS, b"rep_avg_3", 1, 100);
 
     // Average should be (80+60+100)/3 = 80
     let score = state.query_reputation_score(1);
@@ -1585,7 +1585,7 @@ fn test_validation_response_progressive() {
 // ============================================
 
 #[test]
-fn test_submit_feedback_rating_boundaries() {
+fn test_give_feedback_simple_rating_boundaries() {
     let mut state = AgentTestState::new();
     state.register_agent(
         &OWNER_ADDRESS,
@@ -1614,7 +1614,7 @@ fn test_submit_feedback_rating_boundaries() {
         b"resp-boundary-0",
         b"approved",
     );
-    state.submit_feedback(&OWNER_ADDRESS, b"job_boundary_0", 1, 0);
+    state.give_feedback_simple(&OWNER_ADDRESS, b"job_boundary_0", 1, 0);
 
     let score_after_zero = state.query_reputation_score(1);
     assert_eq!(score_after_zero, 0, "Rating 0 → score should be 0");
@@ -1637,7 +1637,7 @@ fn test_submit_feedback_rating_boundaries() {
         b"resp-boundary-100",
         b"approved",
     );
-    state.submit_feedback(&OWNER_ADDRESS, b"job_boundary_100", 1, 100);
+    state.give_feedback_simple(&OWNER_ADDRESS, b"job_boundary_100", 1, 100);
 
     let score_after_hundred = state.query_reputation_score(1);
     assert_eq!(score_after_hundred, 50, "Average of (0 + 100) / 2 = 50");

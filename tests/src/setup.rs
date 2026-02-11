@@ -574,9 +574,8 @@ impl AgentTestState {
 
     // ── Reputation Registry ──
 
-    // authorize_feedback removed — ERC-8004 compliance
 
-    pub fn submit_feedback(
+    pub fn give_feedback_simple(
         &mut self,
         from: &multiversx_sc::types::TestAddress,
         job_id: &[u8],
@@ -588,7 +587,7 @@ impl AgentTestState {
             .from(*from)
             .to(REPUTATION_SC_ADDRESS)
             .typed(ReputationRegistryProxy)
-            .submit_feedback(
+            .give_feedback_simple(
                 ManagedBuffer::from(job_id),
                 agent_nonce,
                 BigUint::from(rating),
@@ -596,7 +595,7 @@ impl AgentTestState {
             .run();
     }
 
-    pub fn submit_feedback_expect_err(
+    pub fn give_feedback_simple_expect_err(
         &mut self,
         from: &multiversx_sc::types::TestAddress,
         job_id: &[u8],
@@ -609,7 +608,7 @@ impl AgentTestState {
             .from(*from)
             .to(REPUTATION_SC_ADDRESS)
             .typed(ReputationRegistryProxy)
-            .submit_feedback(
+            .give_feedback_simple(
                 ManagedBuffer::from(job_id),
                 agent_nonce,
                 BigUint::from(rating),
@@ -1105,7 +1104,6 @@ impl AgentTestState {
             .run();
     }
 
-    // authorize_feedback_expect_err removed — ERC-8004 compliance
 
     pub fn append_response_expect_err(
         &mut self,

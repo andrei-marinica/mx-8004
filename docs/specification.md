@@ -59,7 +59,7 @@ Manages agent identities as soulbound (non-transferable) NFTs.
 
 ## 2. Validation Registry
 
-Handles job lifecycle: initialization, proof submission, verification, and cleanup.
+Handles job lifecycle: initialization, proof submission, ERC-8004 validation (request/response), and cleanup.
 
 ### 2.1 Endpoints
 
@@ -69,7 +69,9 @@ Handles job lifecycle: initialization, proof submission, verification, and clean
 | `upgrade()` | upgrade | No-op |
 | `init_job(job_id, agent_nonce, service_id?)` | anyone, payable | Creates job with `New` status. If `service_id` provided, reads agent's service config from identity registry via cross-contract storage, validates payment token/nonce, requires `amount >= price`, and forwards payment to agent owner |
 | `submit_proof(job_id, proof)` | anyone | Sets proof data and transitions status `New -> Pending` |
-| `verify_job(job_id)` | owner only | Transitions status `Pending -> Verified`, emits event |
+| `submit_proof_with_nft(job_id, proof)` | anyone, payable NFT | Like `submit_proof` but accepts an NFT as proof attachment |
+| `validation_request(job_id, validator_address, request_uri, request_hash)` | agent owner | ERC-8004: Nominate a validator for the job. Sets status to `ValidationRequested`. Emits `validationRequestEvent` |
+| `validation_response(request_hash, response, response_uri, response_hash, tag)` | nominated validator | ERC-8004: Validator submits a response (score 0-100). Sets status to `Verified`. Emits `validationResponseEvent` |
 | `clean_old_jobs(job_ids)` | anyone | Removes jobs older than 3 days (259,200,000 ms) |
 | `set_identity_registry_address(address)` | owner only | Update identity registry address |
 
@@ -79,6 +81,8 @@ Handles job lifecycle: initialization, proof submission, verification, and clean
 |---|---|
 | `is_job_verified(job_id)` | `bool` |
 | `get_job_data(job_id)` | `OptionalValue<JobData>` |
+| `get_validation_status(request_hash)` | `OptionalValue<ValidationRequestData>` |
+| `get_agent_validations(agent_nonce)` | `UnorderedSetMapper<ManagedBuffer>` |
 
 ### 2.3 Storage
 
@@ -86,16 +90,19 @@ Handles job lifecycle: initialization, proof submission, verification, and clean
 |---|---|
 | `jobData(job_id)` | `SingleValueMapper<JobData>` |
 | `identityRegistryAddress` | `SingleValueMapper<ManagedAddress>` |
+| `validationRequestData(request_hash)` | `SingleValueMapper<ValidationRequestData>` |
+| `agentValidations(agent_nonce)` | `UnorderedSetMapper<ManagedBuffer>` |
 
 ### 2.4 Events
 
-- `jobVerified(job_id, agent_nonce, JobStatus::Verified)`
+- `validationRequestEvent(job_id, agent_nonce, validator_address, request_uri, request_hash)`
+- `validationResponseEvent(request_hash, response, response_hash, tag)`
 
 ---
 
 ## 3. Reputation Registry
 
-Collects feedback on verified jobs with authorization gates and cumulative scoring.
+Collects feedback on jobs and computes on-chain reputation scores. No pre-authorization needed — the employer who created the job can submit feedback directly.
 
 ### 3.1 Endpoints
 
@@ -103,9 +110,8 @@ Collects feedback on verified jobs with authorization gates and cumulative scori
 |---|---|---|
 | `init(validation_addr, identity_addr)` | deploy | Stores both contract addresses |
 | `upgrade()` | upgrade | No-op |
-| `submit_feedback(job_id, agent_nonce, rating)` | employer only | Validates: (1) job exists and is `Verified` via cross-contract read, (2) caller is employer, (3) agent owner authorized this feedback, (4) no duplicate feedback. Updates cumulative moving average score |
-| `authorize_feedback(job_id, client)` | agent owner | Agent owner authorizes a specific client address to submit feedback for a job |
-| `append_response(job_id, response_uri)` | agent owner | Agent owner attaches a response URI to a job |
+| `submit_feedback(job_id, agent_nonce, rating)` | employer only | Validates: (1) job exists via cross-contract read from validation registry, (2) caller is the employer who created the job, (3) no duplicate feedback for this job. Updates cumulative moving average score |
+| `append_response(job_id, response_uri)` | anyone | ERC-8004: Anyone can append a response URI to a job (e.g., agent showing refund, data aggregator tagging feedback as spam) |
 | `set_identity_contract_address(address)` | owner only | Update identity registry address |
 | `set_validation_contract_address(address)` | owner only | Update validation registry address |
 
@@ -116,7 +122,6 @@ Collects feedback on verified jobs with authorization gates and cumulative scori
 | `get_reputation_score(agent_nonce)` | `BigUint` |
 | `get_total_jobs(agent_nonce)` | `u64` |
 | `has_given_feedback(job_id)` | `bool` |
-| `is_feedback_authorized(job_id, client)` | `bool` |
 | `get_agent_response(job_id)` | `ManagedBuffer` |
 | `get_validation_contract_address()` | `ManagedAddress` |
 | `get_identity_contract_address()` | `ManagedAddress` |
@@ -128,7 +133,6 @@ Collects feedback on verified jobs with authorization gates and cumulative scori
 | `reputationScore(agent_nonce)` | `SingleValueMapper<BigUint>` |
 | `totalJobs(agent_nonce)` | `SingleValueMapper<u64>` |
 | `hasGivenFeedback(job_id)` | `SingleValueMapper<bool>` |
-| `isFeedbackAuthorized(job_id, client)` | `SingleValueMapper<bool>` |
 | `agentResponse(job_id)` | `SingleValueMapper<ManagedBuffer>` |
 | `validationContractAddress` | `SingleValueMapper<ManagedAddress>` |
 | `identityContractAddress` | `SingleValueMapper<ManagedAddress>` |
@@ -174,7 +178,7 @@ pub struct AgentRegisteredEventData<M: ManagedTypeApi> {
     pub uri: ManagedBuffer<M>,
 }
 
-pub enum JobStatus { New, Pending, Verified }
+pub enum JobStatus { New, Pending, Verified, ValidationRequested }
 
 pub struct JobData<M: ManagedTypeApi> {
     pub status: JobStatus,
@@ -213,8 +217,8 @@ Agent Lifecycle:
 4. Agent calls register_agent() -> receives soulbound NFT
 5. Client calls init_job(job_id, agent_nonce, service_id) with payment -> payment forwarded to agent owner
 6. Worker calls submit_proof(job_id, proof) -> job status: Pending
-7. Contract owner calls verify_job(job_id) -> job status: Verified
-8. Agent owner calls authorize_feedback(job_id, client_address)
+7. (Optional) Agent owner calls validation_request(job_id, validator, uri, hash) -> status: ValidationRequested
+8. (Optional) Validator calls validation_response(request_hash, response, uri, hash, tag) -> status: Verified
 9. Client calls submit_feedback(job_id, agent_nonce, rating) -> reputation score updated
-10. Agent owner optionally calls append_response(job_id, uri)
+10. Anyone optionally calls append_response(job_id, uri)
 ```

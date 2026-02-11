@@ -84,11 +84,26 @@ mod cs {
         interact
             .submit_proof(&worker, b"job-001", b"proof-data-hash")
             .await;
-        interact.verify_job(b"job-001").await;
+
+        // Use validation_request + validation_response flow
+        let validator = interact.owner.clone();
+        interact
+            .validation_request(&bob, b"job-001", &validator, b"req-uri", b"req-hash")
+            .await;
+        interact
+            .validation_response(
+                &validator,
+                b"req-hash",
+                90,
+                b"resp-uri",
+                b"resp-hash",
+                b"quality",
+            )
+            .await;
 
         let verified = interact.query_is_job_verified(b"job-001").await;
         assert!(verified, "Job should be verified");
-        println!("Full job lifecycle (init -> proof -> verify) passed");
+        println!("Full job lifecycle (init -> proof -> validate) passed");
     }
 
     /// Full lifecycle including reputation feedback.
@@ -129,12 +144,26 @@ mod cs {
         interact
             .submit_proof(&worker, b"job-001", b"proof-data-hash")
             .await;
-        interact.verify_job(b"job-001").await;
+
+        // Validation flow
+        let validator = interact.owner.clone();
+        interact
+            .validation_request(&bob, b"job-001", &validator, b"req-uri", b"req-hash")
+            .await;
+        interact
+            .validation_response(
+                &validator,
+                b"req-hash",
+                90,
+                b"resp-uri",
+                b"resp-hash",
+                b"quality",
+            )
+            .await;
 
         // Reputation (cross-contract storage reads from validation)
-        interact.authorize_feedback(&bob, b"job-001", &carol).await;
         interact
-            .submit_feedback(&carol, b"job-001", agent_nonce, 85)
+            .give_feedback_simple(&carol, b"job-001", agent_nonce, 85)
             .await;
         interact
             .append_response(&bob, b"job-001", b"https://response.example.com/result")
@@ -204,7 +233,7 @@ mod cs {
 
     #[tokio::test]
     #[serial]
-    async fn test_verify_job_not_owner_cs() {
+    async fn test_validation_request_not_owner_cs() {
         let _ = env_logger::try_init();
         let mut interact = CsInteract::new().await;
 
@@ -226,12 +255,19 @@ mod cs {
             .submit_proof(&worker, b"job-001", b"proof-data")
             .await;
 
-        // Non-owner (bob) tries to verify — should fail with only_owner error
+        // Non-owner (carol) tries to make a validation request — should fail
         interact
-            .verify_job_expect_err(&bob, b"job-001", 4, "Endpoint can only be called by owner")
+            .validation_request_expect_err(
+                &carol,
+                b"job-001",
+                b"req-uri",
+                b"req-hash",
+                4,
+                "Only the agent owner can request validation",
+            )
             .await;
 
-        println!("Non-owner verify correctly rejected");
+        println!("Non-owner validation request correctly rejected");
     }
 
     #[tokio::test]

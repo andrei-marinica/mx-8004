@@ -6,9 +6,9 @@
 
 // Init:                                 1
 // Upgrade:                              1
-// Endpoints:                           10
+// Endpoints:                           15
 // Async Callback (empty):               1
-// Total number of exported functions:  13
+// Total number of exported functions:  18
 
 #![no_std]
 
@@ -20,7 +20,10 @@ multiversx_sc_wasm_adapter::endpoints! {
     (
         init => init
         upgrade => upgrade
-        submit_feedback => submit_feedback
+        giveFeedbackSimple => give_feedback_simple
+        giveFeedback => give_feedback
+        revokeFeedback => revoke_feedback
+        readFeedback => read_feedback
         append_response => append_response
         get_reputation_score => reputation_score
         get_total_jobs => total_jobs
@@ -28,6 +31,8 @@ multiversx_sc_wasm_adapter::endpoints! {
         get_identity_contract_address => identity_contract_address
         has_given_feedback => has_given_feedback
         get_agent_response => agent_response
+        getLastIndex => last_feedback_index
+        getClients => feedback_clients
         set_identity_contract_address => set_identity_contract_address
         set_validation_contract_address => set_validation_contract_address
     )

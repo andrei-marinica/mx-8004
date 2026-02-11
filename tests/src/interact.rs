@@ -323,6 +323,33 @@ impl CsInteract {
             .await;
     }
 
+    pub async fn validation_request_expect_err(
+        &mut self,
+        from: &Address,
+        job_id: &[u8],
+        request_uri: &[u8],
+        request_hash: &[u8],
+        err_code: u64,
+        err_msg: &str,
+    ) {
+        let validator = self.owner.clone();
+        self.interactor
+            .tx()
+            .from(from)
+            .to(&self.validation_addr)
+            .gas(30_000_000u64)
+            .typed(ValidationRegistryProxy)
+            .validation_request(
+                ManagedBuffer::<StaticApi>::from(job_id),
+                ManagedAddress::<StaticApi>::from(&validator),
+                ManagedBuffer::<StaticApi>::from(request_uri),
+                ManagedBuffer::<StaticApi>::from(request_hash),
+            )
+            .returns(ExpectError(err_code, err_msg))
+            .run()
+            .await;
+    }
+
     pub async fn validation_response(
         &mut self,
         from: &Address,
@@ -352,9 +379,8 @@ impl CsInteract {
 
     // ── Reputation Registry ──
 
-    // authorize_feedback removed — ERC-8004 compliance
 
-    pub async fn submit_feedback(
+    pub async fn give_feedback_simple(
         &mut self,
         from: &Address,
         job_id: &[u8],
@@ -367,7 +393,7 @@ impl CsInteract {
             .to(&self.reputation_addr)
             .gas(30_000_000u64)
             .typed(ReputationRegistryProxy)
-            .submit_feedback(
+            .give_feedback_simple(
                 ManagedBuffer::<StaticApi>::from(job_id),
                 agent_nonce,
                 BigUint::<StaticApi>::from(rating),
@@ -481,7 +507,6 @@ impl CsInteract {
             .await;
     }
 
-    // verify_job_expect_err removed — ERC-8004 compliance
 
     pub async fn submit_proof_expect_err(
         &mut self,

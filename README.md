@@ -20,6 +20,7 @@ sequenceDiagram
     participant User as Employer (User)
     participant VAL as Validation Registry
     participant Agent as Autonomous Agent
+    participant Validator as Validator
     participant REP as Reputation Registry
 
     User->>VAL: init_job(job_id, agent_id)
@@ -28,13 +29,14 @@ sequenceDiagram
     Agent->>VAL: submit_proof(job_id, proof_hash)
     Note over VAL: Pending Verification
 
-    VAL->>VAL: verify_job(job_id) [By Oracle]
+    Agent->>VAL: validation_request(job_id, validator, uri, hash)
+    Note over VAL: Validator Nominated
 
-    Agent->>REP: authorize_feedback(job_id, user_addr)
-    Note over REP: Authorization Gate Opens
+    Validator->>VAL: validation_response(hash, score, uri, hash, tag)
+    Note over VAL: Job Verified
 
     User->>REP: submit_feedback(job_id, rating)
-    Note over REP: Verified & Score Updated
+    Note over REP: Score Updated (CMA)
 ```
 
 ## Quick Start

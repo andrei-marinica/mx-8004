@@ -26,7 +26,8 @@ pub async fn validation_registry_cli() {
         "upgrade" => interact.upgrade().await,
         "init_job" => interact.init_job().await,
         "submit_proof" => interact.submit_proof().await,
-        "verify_job" => interact.verify_job().await,
+        "validation_request" => interact.validation_request().await,
+        "validation_response" => interact.validation_response().await,
         "clean_old_jobs" => interact.clean_old_jobs().await,
         "is_job_verified" => interact.is_job_verified().await,
         "get_job_data" => interact.get_job_data().await,
@@ -37,49 +38,49 @@ pub async fn validation_registry_cli() {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct State {
-    contract_address: Option<Bech32Address>
+    contract_address: Option<Bech32Address>,
 }
 
 impl State {
-        // Deserializes state from file
-        pub fn load_state() -> Self {
-            if Path::new(STATE_FILE).exists() {
-                let mut file = std::fs::File::open(STATE_FILE).unwrap();
-                let mut content = String::new();
-                file.read_to_string(&mut content).unwrap();
-                toml::from_str(&content).unwrap()
-            } else {
-                Self::default()
-            }
-        }
-    
-        /// Sets the contract address
-        pub fn set_address(&mut self, address: Bech32Address) {
-            self.contract_address = Some(address);
-        }
-    
-        /// Returns the contract address
-        pub fn current_address(&self) -> &Bech32Address {
-            self.contract_address
-                .as_ref()
-                .expect("no known contract, deploy first")
+    // Deserializes state from file
+    pub fn load_state() -> Self {
+        if Path::new(STATE_FILE).exists() {
+            let mut file = std::fs::File::open(STATE_FILE).unwrap();
+            let mut content = String::new();
+            file.read_to_string(&mut content).unwrap();
+            toml::from_str(&content).unwrap()
+        } else {
+            Self::default()
         }
     }
-    
-    impl Drop for State {
-        // Serializes state to file
-        fn drop(&mut self) {
-            let mut file = std::fs::File::create(STATE_FILE).unwrap();
-            file.write_all(toml::to_string(self).unwrap().as_bytes())
-                .unwrap();
-        }
+
+    /// Sets the contract address
+    pub fn set_address(&mut self, address: Bech32Address) {
+        self.contract_address = Some(address);
     }
+
+    /// Returns the contract address
+    pub fn current_address(&self) -> &Bech32Address {
+        self.contract_address
+            .as_ref()
+            .expect("no known contract, deploy first")
+    }
+}
+
+impl Drop for State {
+    // Serializes state to file
+    fn drop(&mut self) {
+        let mut file = std::fs::File::create(STATE_FILE).unwrap();
+        file.write_all(toml::to_string(self).unwrap().as_bytes())
+            .unwrap();
+    }
+}
 
 pub struct ContractInteract {
     interactor: Interactor,
     wallet_address: Address,
     contract_code: BytesValue,
-    state: State
+    state: State,
 }
 
 impl ContractInteract {
@@ -94,7 +95,7 @@ impl ContractInteract {
         // Useful in the chain simulator setting
         // generate blocks until ESDTSystemSCAddress is enabled
         interactor.generate_blocks_until_all_activations().await;
-        
+
         let contract_code = BytesValue::interpret_from(
             "mxsc:../output/validation-registry.mxsc.json",
             &InterpreterContext::default(),
@@ -104,7 +105,7 @@ impl ContractInteract {
             interactor,
             wallet_address,
             contract_code,
-            state: State::load_state()
+            state: State::load_state(),
         }
     }
 
@@ -162,7 +163,11 @@ impl ContractInteract {
             .gas(30_000_000u64)
             .typed(validation_registry_proxy::ValidationRegistryProxy)
             .init_job(job_id, agent_nonce, service_id)
-            .payment((EsdtTokenIdentifier::from(token_id.as_str()), token_nonce, token_amount))
+            .payment((
+                EsdtTokenIdentifier::from(token_id.as_str()),
+                token_nonce,
+                token_amount,
+            ))
             .returns(ReturnsResultUnmanaged)
             .run()
             .await;
@@ -189,8 +194,11 @@ impl ContractInteract {
         println!("Result: {response:?}");
     }
 
-    pub async fn verify_job(&mut self) {
+    pub async fn validation_request(&mut self) {
         let job_id = ManagedBuffer::new_from_bytes(&b""[..]);
+        let validator_address = ManagedAddress::<StaticApi>::zero();
+        let request_uri = ManagedBuffer::new_from_bytes(&b""[..]);
+        let request_hash = ManagedBuffer::new_from_bytes(&b""[..]);
 
         let response = self
             .interactor
@@ -199,7 +207,29 @@ impl ContractInteract {
             .to(self.state.current_address())
             .gas(30_000_000u64)
             .typed(validation_registry_proxy::ValidationRegistryProxy)
-            .verify_job(job_id)
+            .validation_request(job_id, validator_address, request_uri, request_hash)
+            .returns(ReturnsResultUnmanaged)
+            .run()
+            .await;
+
+        println!("Result: {response:?}");
+    }
+
+    pub async fn validation_response(&mut self) {
+        let request_hash = ManagedBuffer::new_from_bytes(&b""[..]);
+        let response_val = 0u8;
+        let response_uri = ManagedBuffer::new_from_bytes(&b""[..]);
+        let response_hash = ManagedBuffer::new_from_bytes(&b""[..]);
+        let tag = ManagedBuffer::new_from_bytes(&b""[..]);
+
+        let response = self
+            .interactor
+            .tx()
+            .from(&self.wallet_address)
+            .to(self.state.current_address())
+            .gas(30_000_000u64)
+            .typed(validation_registry_proxy::ValidationRegistryProxy)
+            .validation_response(request_hash, response_val, response_uri, response_hash, tag)
             .returns(ReturnsResultUnmanaged)
             .run()
             .await;
@@ -274,5 +304,4 @@ impl ContractInteract {
 
         println!("Result: {response:?}");
     }
-
 }
